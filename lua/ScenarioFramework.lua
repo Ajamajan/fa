@@ -64,19 +64,21 @@ function EndOperation(success, allPrimary, allSecondary, allBonus)
 
     import("/lua/sim/matchstate.lua").CallEndGame() -- We need this here to populate the score screen
 
-    ForkThread(function()
-        WaitSeconds(3) -- Wait for the stats to be synced
-        UnlockInput()
-        EndOperationT {
-            success = success,
-            difficulty = ScenarioInfo.Options.Difficulty,
-            allPrimary = allPrimary,
-            allSecondary = allSecondary,
-            allBonus = allBonus,
-            faction = ScenarioInfo.LocalFaction,
-            opData = opData.operationData
-        }
-    end)
+    ForkThread(EndOperationThread, {
+        success = success,
+        difficulty = ScenarioInfo.Options.Difficulty,
+        allPrimary = allPrimary,
+        allSecondary = allSecondary,
+        allBonus = allBonus,
+        faction = ScenarioInfo.LocalFaction,
+        opData = opData.operationData
+    })
+end
+
+function EndOperationThread(tbl)
+    WaitSeconds(3) -- Wait for the stats to be synced
+    UnlockInput()
+    EndOperationT(tbl)
 end
 
 ---@alias FactionSelectData {Faction: "aeon" | "cybran" | "uef"}
@@ -800,7 +802,7 @@ function PlayVoiceOver(voSound)
 end
 
 --- Sets enhancement restrictions from the names of the enhancements you do not want the player to build
----@param enhancements string[]
+---@param enhancements Enhancement[]
 function RestrictEnhancements(enhancements)
     local restrict = {}
     for _, enh in enhancements do
@@ -1246,8 +1248,8 @@ function SetPlayableArea(rect, voFlag)
     local x1 = rect.x1 - math.mod(rect.x1, 4)
     local y1 = rect.y1 - math.mod(rect.y1, 4)
 
-    LOG(string.format('Debug: SetPlayableArea before round : %s, %s %s, %s', rect.x0, rect.y0, rect.x1, rect.y1))
-    LOG(string.format('Debug: SetPlayableArea after round : %s, %s %s, %s', x0, y0, x1, y1))
+    SPEW(string.format('SetPlayableArea before round : %s, %s %s, %s', rect.x0, rect.y0, rect.x1, rect.y1))
+    SPEW(string.format('SetPlayableArea after round : %s, %s %s, %s', x0, y0, x1, y1))
 
     ScenarioInfo.MapData.PlayableRect = {x0, y0, x1, y1}
     rect.x0 = x0

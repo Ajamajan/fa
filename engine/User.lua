@@ -19,8 +19,113 @@
 ---| 1 # Hold fire
 ---| 2 # Ground fire
 
---- No clue what this does
----@param entityId number
+---@alias Keycode
+--- | 'BACK'
+--- | 'TAB'
+--- | 'RETURN'
+--- | 'ESCAPE'
+--- | 'SPACE'
+--- | 'DELETE'
+--- | 'START'
+--- | 'LBUTTON'
+--- | 'RBUTTON'
+--- | 'CANCEL'
+--- | 'MBUTTON'
+--- | 'CLEAR'
+--- | 'SHIFT'
+--- | 'ALT'
+--- | 'CONTROL'
+--- | 'MENU'
+--- | 'PAUSE'
+--- | 'CAPITAL'
+--- | 'PRIOR'
+--- | 'NEXT'
+--- | 'END'
+--- | 'HOME'
+--- | 'LEFT'
+--- | 'UP'
+--- | 'RIGHT'
+--- | 'DOWN'
+--- | 'SELECT'
+--- | 'PRINT'
+--- | 'EXECUTE'
+--- | 'SNAPSHOT'
+--- | 'INSERT'
+--- | 'HELP'
+--- | 'NUMPAD0'
+--- | 'NUMPAD1'
+--- | 'NUMPAD2'
+--- | 'NUMPAD3'
+--- | 'NUMPAD4'
+--- | 'NUMPAD5'
+--- | 'NUMPAD6'
+--- | 'NUMPAD7'
+--- | 'NUMPAD8'
+--- | 'NUMPAD9'
+--- | 'MULTIPLY'
+--- | 'ADD'
+--- | 'SEPARATOR'
+--- | 'SUBTRACT'
+--- | 'DECIMAL'
+--- | 'DIVIDE'
+--- | 'F1'
+--- | 'F2'
+--- | 'F3'
+--- | 'F4'
+--- | 'F5'
+--- | 'F6'
+--- | 'F7'
+--- | 'F8'
+--- | 'F9'
+--- | 'F10'
+--- | 'F11'
+--- | 'F12'
+--- | 'F13'
+--- | 'F14'
+--- | 'F15'
+--- | 'F16'
+--- | 'F17'
+--- | 'F18'
+--- | 'F19'
+--- | 'F20'
+--- | 'F21'
+--- | 'F22'
+--- | 'F23'
+--- | 'F24'
+--- | 'NUMLOCK'
+--- | 'SCROLL'
+--- | 'PAGEUP'
+--- | 'PAGEDOWN'
+--- | 'NUMPAD_SPACE'
+--- | 'NUMPAD_TAB'
+--- | 'NUMPAD_ENTER'
+--- | 'NUMPAD_F1'
+--- | 'NUMPAD_F2'
+--- | 'NUMPAD_F3'
+--- | 'NUMPAD_F4'
+--- | 'NUMPAD_HOME'
+--- | 'NUMPAD_LEFT'
+--- | 'NUMPAD_UP'
+--- | 'NUMPAD_RIGHT'
+--- | 'NUMPAD_DOWN'
+--- | 'NUMPAD_PRIOR'
+--- | 'NUMPAD_PAGEUP'
+--- | 'NUMPAD_NEXT'
+--- | 'NUMPAD_PAGEDOWN'
+--- | 'NUMPAD_END'
+--- | 'NUMPAD_BEGIN'
+--- | 'NUMPAD_INSERT'
+--- | 'NUMPAD_DELETE'
+--- | 'NUMPAD_EQUAL'
+--- | 'NUMPAD_MULTIPLY'
+--- | 'NUMPAD_ADD'
+--- | 'NUMPAD_SEPARATOR'
+--- | 'NUMPAD_SUBTRACT'
+--- | 'NUMPAD_DECIMAL'
+--- | 'NUMPAD_DIVIDE'
+
+--- Repeatedly the selection box of the unit to the hovered-over state to create a blinking effect
+---@param entityId EntityId
 ---@param onTime number
 ---@param offTime number
 ---@param totalTime number
@@ -130,9 +235,11 @@ end
 function DecreaseBuildCountInQueue(queueIndex, count)
 end
 
----
----@param id unknown
-function DeleteCommand(id)
+---Deletes a command from the player command queue.
+---Each player has an array that holds all commands for all units, the commandID indexes to that array.
+---Note: this function doesn't receive any units as arguments--you will have to retrieve the commandId by UserUnit:GetCommandQueue()[commandIndex].ID
+---@param commandId number commandId, from UserUnit:GetCommandQueue()[commandIndex].ID
+function DeleteCommand(commandId)
 end
 
 ---
@@ -163,11 +270,10 @@ end
 function EntityCategoryFilterOut(category, units)
 end
 
---- Executes some Lua code in the sim
+--- Executes some Lua code in the sim. Requires cheats to be enabled
 ---@param func function
----@param ... any this may actually be a comma-separated string of args instead of a vararg
----@return any
-function ExecLuaInSim(func, ...)
+---@param value any
+function ExecLuaInSim(func, value)
 end
 
 --- Requests that the application shut down
@@ -205,7 +311,7 @@ function GenerateBuildTemplateFromSelection()
 end
 
 --- Gets active build template back to Lua
----@return BuildTemplate
+---@return UIBuildTemplate
 function GetActiveBuildTemplate()
 end
 
@@ -249,13 +355,13 @@ end
 function GetCamera(name)
 end
 
---- Gets the following arguments to a commandline option. For example, if `/arg -flag key:value drop`
---- was passed to the commandline, then `GetCommandLineArg("/arg", 2)` would return
---- `{"-flag", "key:value"}`
+--- Gets the "arguments" (tokens split by spaces) that follow a commandline option,
+--- disregarding if they start with `/` like other commandline options.  
+--- Returns `false` if there are not `maxArgs` tokens after the `option`.
 ---@see GetCommandLineArgTable(option) for parsing key-values
 ---@param option string
 ---@param maxArgs number
----@return string[]?
+---@return string[] | false
 function GetCommandLineArg(option, maxArgs)
 end
 
@@ -280,9 +386,17 @@ end
 function GetFireState(units)
 end
 
---- Returns the root UI frame for a given head
----@param head number
----@return Frame
+--- Returns the root UI frame for a given adapter. You can use `GetFrame(0)` to retrieve the primary adapter. And you can use `GetFrame(1)` to retrieve the secondary adapter. 
+---
+--- In the game options you can add a second adapter under the 'Video' tab.
+--- 
+--- See also `GetNumRootFrames()` to determine the number of root frames. 
+--- 
+--- See also the following modules that manage these frames:
+--- - Primary adapter: lua\ui\game\worldview.lua
+--- - Secondary adapter: lua\ui\game\multihead.lua
+---@param head 0 | 1
+---@return Frame | nil
 function GetFrame(head)
 end
 
@@ -367,7 +481,14 @@ end
 function GetMovieVolume()
 end
 
---- Returns the current number of root frames (typically one per head)
+--- Returns the current number of root frames. There is usually only one root frame for each adapter (monitor). This is often referred to as a 'head' in other comments. The game supports up to two root frames.
+--- 
+--- In the game options you can add a second adapter under the 'Video' tab.
+---
+--- See also `GetFrame(0)` to retrieve the root frame of the primary adapter and `GetFrame(1)` to retrieve the root frame of the secondary adapter. 
+--- See also the following modules that manage these frames:
+--- - Primary adapter: lua\ui\game\worldview.lua
+--- - Secondary adapter: lua\ui\game\multihead.lua
 ---@return number
 function GetNumRootFrames()
 end
@@ -481,7 +602,7 @@ function GetUIControlsAlpha()
 end
 
 --- Given a set of units, gets the union of orders and unit categories (for determining builds). You can use `GetUnitCommandFromCommandCap` to convert the toggles to unit commands
----@param unitSet any
+---@param unitSet UserUnit[]
 ---@return string[] orders
 ---@return CommandCap[] availableToggles
 ---@return EntityCategory buildableCategories
@@ -489,17 +610,44 @@ function GetUnitCommandData(unitSet)
 end
 
 --- Retrieves the orders, toggles and buildable categories of the given unit. You can use `GetUnitCommandFromCommandCap` to convert the toggles to unit commands
----@param unit any
+---@param unit UserUnit
 ---@return string[] orders
 ---@return CommandCap[] availableToggles
 ---@return EntityCategory buildableCategories
 function GetUnitCommandDataOfUnit(unit)
 end
 
---- Givens a `RULEUCC` type command, return the equivalent `UNITCOMMAND` command.
---- See `/lua/ui/game/commandgraphparams.lua#CommandGraphParams`.
----@param rule CommandCap
----@return string
+--- Given a `RULEUCC` type command, return the equivalent `UNITCOMMAND` command or "None" otherwise.  
+--- See `/lua/ui/game/commandgraphparams.lua#CommandGraphParams` or `UserUnitCommand`.
+--[[```
+             RULEUCC_Move = Move
+             RULEUCC_Stop = Stop
+           RULEUCC_Attack = Attack
+            RULEUCC_Guard = Guard
+           RULEUCC_Patrol = Patrol
+  RULEUCC_RetaliateToggle = None
+           RULEUCC_Repair = Repair
+          RULEUCC_Capture = Capture
+        RULEUCC_Transport = TransportUnloadUnits
+    RULEUCC_CallTransport = TransportLoadUnits
+             RULEUCC_Nuke = Nuke
+         RULEUCC_Tactical = Tactical
+         RULEUCC_Teleport = Teleport
+            RULEUCC_Ferry = Ferry
+RULEUCC_SiloBuildTactical = BuildSiloTactical
+    RULEUCC_SiloBuildNuke = BuildSiloNuke
+        RULEUCC_Sacrifice = Sacrifice
+            RULEUCC_Pause = Pause
+       RULEUCC_Overcharge = OverCharge
+             RULEUCC_Dive = Dive
+          RULEUCC_Reclaim = Reclaim
+    RULEUCC_SpecialAction = SpecialAction
+             RULEUCC_Dock = None
+           RULEUCC_Script = None
+          RULEUCC_Invalid = None
+```]]
+---@param rule EngineCommandCap
+---@return string | "None"
 function GetUnitCommandFromCommandCap(rule)
 end
 
@@ -518,9 +666,9 @@ end
 function GpgNetActive()
 end
 
----@param cmd string
----@param ... any
-function GpgNetSend(cmd, ...)
+---@param command string
+---@param ... number | string
+function GpgNetSend(command, ...)
 end
 
 ---
@@ -542,8 +690,8 @@ end
 function IN_RemoveKeyMapTable(keyMapTable)
 end
 
----
----@param queueIndex any
+--- Increase the count at a given location of the current build queue
+---@param queueIndex number
 ---@param count number
 function IncreaseBuildCountInQueue(queueIndex, count)
 end
@@ -562,7 +710,7 @@ end
 
 --- For internal use by `CreateDiscoveryService()`
 ---@param serviceClass fa-class
----@return DiscoveryService
+---@return UILobbyDiscoveryService
 function InternalCreateDiscoveryService(serviceClass)
 end
 
@@ -600,15 +748,18 @@ end
 function InternalCreateItemList(itemList, parent)
 end
 
+---@alias UILobbyProtocols "UDP" | "TCP" | "None
+
 --- For internal use by `CreateLobbyComm()`
----@param lobbyComClass fa-class
----@param protocol string
+---@generic T
+---@param lobbyComClass T
+---@param protocol UILobbyProtocols
 ---@param localPort number
 ---@param maxConnections number
 ---@param playerName string
----@param playerUID string
----@param natTraversalProvider userdata
----@return LobbyComm
+---@param playerUID? string
+---@param natTraversalProvider? userdata
+---@return T
 function InternalCreateLobby(lobbyComClass, protocol, localPort, maxConnections, playerName, playerUID, natTraversalProvider)
 end
 
@@ -701,11 +852,19 @@ end
 function IssueBlueprintCommandToUnit(unit, command, blueprintid, count, clear)
 end
 
----
----@param command any
----@param string any?
+--- Issue a command to a given unit
+---@param unit UserUnit
+---@param command UserUnitCommand # Will crash the game if not a valid command.
+---@param luaParams? table | string | number | boolean # Will crash the game if the table contains non-serializable types.
+---@param clear? boolean
+IssueUnitCommandToUnit = function(unit, command, luaParams, clear)
+end
+
+--- Issue a command to the current selection. 
+---@param command UserUnitCommand # Will crash the game if not a valid command.
+---@param luaParams? table | string | number | boolean # Will crash the game if the table contains non-serializable types.
 ---@param clear boolean?
-function IssueCommand(command, string, clear)
+function IssueCommand(command, luaParams, clear)
 end
 
 ---
@@ -713,12 +872,12 @@ end
 function IssueDockCommand(clear)
 end
 
----
+--- Issue a command to the given units.
 ---@param unitList UserUnit[]
----@param command string
----@param string? string
+---@param command UserUnitCommand # Will crash the game if not a valid command.
+---@param luaParams? table | string | number | boolean # Will crash the game if the table contains non-serializable types.
 ---@param clear? boolean
-function IssueUnitCommand(unitList, command, string, clear)
+function IssueUnitCommand(unitList, command, luaParams, clear)
 end
 
 --- Given a MS Windows char code, returns the Maui char code
@@ -803,14 +962,14 @@ end
 --- Make `dragger` the active dragger from a particular frame.
 --- You can pass `nil` to cancel the current dragger.
 ---@param originFrame Frame
----@param keycode string
+---@param keycode 'LBUTTON' | 'MBUTTON' | 'RBUTTON'
 ---@param dragger Dragger | nil
 function PostDragger(originFrame, keycode, dragger)
 end
 
 --- Start a background load with the given map and mods.
 --- If `hipri` is true, this will interrupt any previous loads in progress.
----@param mapname string
+---@param mapname string        # path to the `scmap` file
 ---@param mods ModInfo[]
 ---@param hipri? boolean
 function PrefetchSession(mapname, mods, hipri)
@@ -895,7 +1054,8 @@ function SessionGetLocalCommandSource()
 end
 
 --- Return the table of scenario info that was originally passed to the sim on launch
----@return UIScenarioInfo
+--- Unlike other engine functions that return tables, this function returns the same table each time it is called.
+---@return UISessionSenarioInfo
 function SessionGetScenarioInfo()
 end
 
@@ -936,19 +1096,20 @@ end
 --- Resume the world simulation
 function SessionResume()
 end
- 
----
----@param client? number | number[] client or clients
----@param message table | number | string
+
+--- Sends a message to one, more or all other connected clients. This message is sent separately from the simulation. But it is sent in order.
+---@overload fun(message: table | number | string)
+---@param client? number | number[]         # client or clients
+---@param message table | number | string   # 
 function SessionSendChatMessage(client, message)
 end
 
 --- Set this as an active build template
----@param template BuildTemplate
+---@param template UIBuildTemplate
 function SetActiveBuildTemplate(template)
 end
 
---- Set if anyone in the list is auto building
+--- Set if anyone in the list is auto building or auto assisting
 ---@param units UserUnit[]
 ---@param mode boolean
 function SetAutoMode(units, mode)
@@ -1041,6 +1202,11 @@ end
 ---@param category string
 ---@param volume number 0.0 - 2.0
 function SetVolume(category, volume)
+end
+
+--- If set, inverts the middle mouse button
+---@param flag boolean
+function SetInvertMidMouseButton(flag)
 end
 
 --- Performs a callback with the given identifier from `callback.Func` in `/lua/simcallbacks.lua`.

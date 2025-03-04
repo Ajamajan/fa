@@ -42,7 +42,7 @@ function SetLayout()
             local Scale = LayoutHelpers.ScaleNumber
             local height = Scale(-4) + panel.label.Height() + Scale(5) + panel.votes.Height()
             -- make sure these register as a dependency
-            local voteHeight = panel.buttonAccept.Height()
+            local voteHeight = panel.buttonYes.Height()
             local progHeight = panel.progressBarBG.Height()
             local startTime = panel.startTime()
             if panel.canVote() then
@@ -66,6 +66,18 @@ function ToggleControl()
     end
 end
 
+---@class RecallSyncData
+---@field StartTime number # When the recall vote started sim-side in seconds
+---@field Open number # Duration of the recall vote in seconds
+---@field Blocks number? # number of voters. `nil` if the block count does not need to be updated, due to the edge case of a 2 player team where neither player has voted due to the vote requester's defeat
+---@field Yes number # number of Yes votes
+---@field No number # number of No votes
+---@field CanVote boolean # Whether or not the focused army has voted or is defeated
+---@field Cancel true?
+---@field CannotRequest CannotRecallReason
+---@field Close boolean # boolean is the recall result
+
+---@param data RecallSyncData
 function RequestHandler(data)
     if data.CannotRequest ~= nil then
         import("/lua/ui/game/diplomacy.lua").SetCannotRequestRecallReason(data.CannotRequest)
@@ -73,7 +85,7 @@ function RequestHandler(data)
     if data.Open then
         panel:StartVote(data.Blocks, data.Open, data.CanVote, data.StartTime)
     end
-    local yes, no = data.Accept, data.Veto -- TODO: rename to `Yes` and `No`
+    local yes, no = data.Yes, data.No
     if yes or no then
         panel:AddVotes(yes, no)
     end
@@ -95,9 +107,8 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         self.collapseArrow = UIUtil.CreateCollapseArrow(parent, "t")
         self.label = UIUtil.CreateText(self, "<LOC diplomacy_0018>Ready for recall", 18, UIUtil.bodyFont, true)
         self.votes = Group(self)
-        -- TODO: rename to `buttonYes` and `buttonNo`
-        self.buttonAccept = UIUtil.CreateButtonStd(self, "/widgets02/small", "<LOC diplomacy_0016>Yes", 16)
-        self.buttonVeto = UIUtil.CreateButtonStd(self, "/widgets02/small", "<LOC diplomacy_0017>No", 16)
+        self.buttonYes = UIUtil.CreateButtonStd(self, "/widgets02/small", "<LOC diplomacy_0016>Yes", 16)
+        self.buttonNo = UIUtil.CreateButtonStd(self, "/widgets02/small", "<LOC diplomacy_0017>No", 16)
         self.progressBarBG = UIUtil.CreateBitmapColor(self, "Gray")
         self.progressBar = UIUtil.CreateBitmapColor(self.progressBarBG, "Yellow")
 
@@ -135,12 +146,12 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
             end)
             :End()
 
-        local buttonYes = Layouter(self.buttonAccept)
+        local buttonYes = Layouter(self.buttonYes)
             :AtLeftIn(self, 8)
             :AnchorToBottom(votes, 5)
             :End()
 
-        local buttonNo = Layouter(self.buttonVeto)
+        local buttonNo = Layouter(self.buttonNo)
             :AtRightIn(self, 8)
             :AnchorToBottom(votes, 5)
             :End()
@@ -160,9 +171,8 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
             :End()
 
         Tooltip.AddCheckboxTooltip(collapseArrow, "voting_collapse")
-        -- TODO: rename to `dip_recall_request_yes` and `dip_recall_request_no`
-        Tooltip.AddButtonTooltip(buttonYes, "dip_recall_request_accept")
-        Tooltip.AddButtonTooltip(buttonNo, "dip_recall_request_veto")
+        Tooltip.AddButtonTooltip(buttonYes, "dip_recall_request_yes")
+        Tooltip.AddButtonTooltip(buttonNo, "dip_recall_request_no")
     end,
 
     LayoutBlocks = function(self, blocks)
@@ -170,15 +180,15 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         local currentBlocks = votes.blocks
         if blocks ~= currentBlocks then
             votes.blocks = blocks
-            for i = currentBlocks, 1, -1 do
+            for i = (currentBlocks or 1), 1, -1 do
                 local block = votes[i]
                 if block then
                     block:Destroy()
                 end
                 votes[i] = nil
             end
-            if blocks > 2 then
-                local panelWidth = votes.Width()
+            if blocks then
+                local panelWidth = votes.Width() / LayoutHelpers.GetPixelScaleFactor() -- pre-unmultiply scale factor
                 local width = math.floor(panelWidth / blocks)
                 local offsetX = math.floor((panelWidth - blocks * width) * 0.5) - width
                 for i = 1, blocks do
@@ -202,6 +212,18 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
             end
             -- manual dirtying of the lazyvar
             votes.Height[1] = nil
+        elseif currentBlocks then
+            local function SetTextures(vote, filename)
+                vote._left:SetTexture(UIUtil.UIFile(filename .. "_bmp_l.dds"))
+                vote._middle:SetTexture(UIUtil.UIFile(filename .. "_bmp_m.dds"))
+                vote._right:SetTexture(UIUtil.UIFile(filename .. "_bmp_r.dds"))
+            end
+
+            -- reset the status of existing blocks
+            for i = 1, currentBlocks do
+                votes[i].cast = nil
+                SetTextures(votes[i], "/game/recall-panel/recall-vote")
+            end
         end
     end,
 
@@ -243,8 +265,8 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         local function ShowForVote(button, hide)
             return not hide and not self.canVote()
         end
-        self.buttonAccept.OnHide = ShowForVote
-        self.buttonAccept.OnClick = function()
+        self.buttonYes.OnHide = ShowForVote
+        self.buttonYes.OnClick = function()
             SimCallback({
                 Func = "SetRecallVote",
                 Args = {
@@ -254,8 +276,8 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
             })
             self:SetCanVote(false)
         end
-        self.buttonVeto.OnHide = ShowForVote
-        self.buttonVeto.OnClick = function()
+        self.buttonNo.OnHide = ShowForVote
+        self.buttonNo.OnClick = function()
             SimCallback({
                 Func = "SetRecallVote",
                 Args = {
@@ -268,8 +290,8 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
     end,
 
     SetCanVote = function(self, canVote)
-        local buttonYes = self.buttonAccept
-        local buttonNo = self.buttonVeto
+        local buttonYes = self.buttonYes
+        local buttonNo = self.buttonNo
         self.canVote:Set(canVote)
         if canVote then
             buttonYes:Show()
@@ -308,6 +330,7 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
                 self.reviewResultsThread = nil
             end, self)
         end
+        self.label:SetText(LOC("<LOC diplomacy_0018>Ready for recall"))
     end,
 
     CancelVote = function(self)
@@ -325,7 +348,7 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         self.startTime:Set(-9999) -- make sure the OnFrame animation ends
         if self.reviewResultsThread then
             -- continue the OnSecond animation if it exists
-            coroutine.resume(self.reviewResultsThread)
+            ResumeThread(self.reviewResultsThread)
         else
             -- otherwise, create our own result reviewing handler
             self.reviewResultsThread = ForkThread(function(self)
@@ -338,18 +361,21 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         if passed then
             self:OnVoteAccepted()
         else
-            self:OnVoteVetoed()
+            self:OnVoteRejected()
         end
     end,
 
-    AddVotes = function(self, accept, veto)
+    AddVotes = function(self, yes, no)
         local votes = self.votes
-        if votes.blocks < 3 then return end
+        if not votes.blocks then return end
+
         local function SetTextures(vote, filename)
             vote._left:SetTexture(UIUtil.UIFile(filename .. "_bmp_l.dds"))
             vote._middle:SetTexture(UIUtil.UIFile(filename .. "_bmp_m.dds"))
             vote._right:SetTexture(UIUtil.UIFile(filename .. "_bmp_r.dds"))
         end
+
+        -- get where these new votes should be added on top of existing ones
         local index = 1
         for i = 1, votes.blocks do
             if not votes[i].cast then
@@ -357,16 +383,18 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
                 break
             end
         end
-        if accept then
-            for _ = 1, accept do
+
+        -- add the new votes
+        if yes then
+            for _ = 1, yes do
                 local vote = votes[index]
                 index = index + 1
                 vote.cast = "yes"
                 SetTextures(vote, "/game/recall-panel/recall-accept")
             end
         end
-        if veto then
-            for _ = 1, veto do
+        if no then
+            for _ = 1, no do
                 local vote = votes[index]
                 index = index + 1
                 vote.cast = "no"
@@ -405,13 +433,21 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         if time > 0 then
             local dur = self.duration
             time = GetGameTimeSeconds() - time
-            local nominalWidth = self.Width() - LayoutHelpers.ScaleNumber(16)
+            local pb = self.progressBar
+            local bg = self.progressBarBG
+            local nominalWidth = bg.Width() - LayoutHelpers.ScaleNumber(16)
             if time >= dur then
                 self.startTime:Set(-9999)
-                self.progressBar.Width:Set(0)
-                self.progressBar:Hide()
+                LayoutHelpers.AtHorizontalCenterIn(bg, pb)
+                pb.Width:Set(0)
+                pb:Hide()
             else
-                self.progressBar.Width:Set((1 - time / dur) * nominalWidth)
+                local wings = 0.5 * (1 - time / dur) * nominalWidth
+                -- it jitters less when you set both the left and the right instead of relying
+                -- on the layout centering with the width
+                local center = bg.Left() + 0.5 * bg.Width()
+                pb.Left:Set(math.floor(center - wings))
+                pb.Right:Set(math.ceil(center + wings))
             end
             notAnimating = false
         end
@@ -431,7 +467,7 @@ RecallPanel = ClassUI(NinePatch.NinePatch) {
         self.label:SetText(LOC("<LOC diplomacy_0023>Recalling..."))
     end,
 
-    OnVoteVetoed = function(self)
+    OnVoteRejected = function(self)
         import("/lua/ui/game/announcement.lua").CreateAnnouncement(LOC("<LOC diplomacy_0022>The recall vote did not pass."))
         self.label:SetText(LOC("<LOC diplomacy_0024>Not ready for recall"))
     end,

@@ -6,19 +6,39 @@
 --* Copyright © 2005 Gas Powered Games, Inc.  All rights reserved.
 --*****************************************************************************
 
+--- This module is responsible for creating the primary worldview(s) and managing all worldviews in general.
+---
+--- This module is tightly coupled with the following module(s):
+--- - lua/ui/game/multihead.lua
+
 local UIUtil = import("/lua/ui/uiutil.lua")
 local LayoutHelpers = import("/lua/maui/layouthelpers.lua")
 local Bitmap = import("/lua/maui/bitmap.lua").Bitmap
 local Group = import("/lua/maui/group.lua").Group
 local Factions = import("/lua/factions.lua").Factions
 
+--- A list of all available worldviews.
+---@type table<string, WorldView>
 MapControls = {}
 
+--- A group that covers the entire screen.
+---@type Group | false
 view = false
+
+--- Primary view, and if in split screen this is the left view. The left view is always visible. 
+--- 
+--- Most features are tightly coupled with the left worldview. This is an implementation detail, usually for performance reasons. One example is the reclaim overlay.
+---@type WorldView | false
 viewLeft = false
+
+--- Secondary view used in split screen. This is the right view. 
+---@type WorldView | false
 viewRight = false
+
 secondaryView = false
+
 tertiaryView = false
+
 local parentForFrame = false
 
 positionMarkers = {}
@@ -46,7 +66,7 @@ local function CreatePositionMarker(army, worldView)
     marker.frame.Depth:Set(marker:Depth() - 1)
 
     marker.name = UIUtil.CreateText(marker, data.name, 12, UIUtil.bodyFont)
-	marker.name:DisableHitTest()
+    marker.name:DisableHitTest()
     marker.name:SetColor('white')
 
     if Factions[data.faction] then
@@ -119,7 +139,7 @@ function MarkStartPositions(startPositions)
             local faction = armyData.faction + 1
             local color = armyData.color
 
-            positionMarkers[armyId] = {army = armyId, pos = pos, name = name, faction = faction, color = color, views = 0}
+            positionMarkers[armyId] = { army = armyId, pos = pos, name = name, faction = faction, color = color, views = 0 }
 
             for viewName, view in MapControls do
                 if viewName ~= 'MiniMap' then
@@ -130,7 +150,21 @@ function MarkStartPositions(startPositions)
     end
 end
 
+--- Creates the world view on the primary monitor.
+---@param parent Control
+---@param mapGroup Control
+---@param mapGroupRight? Control # if provided, creates a split view with a separate world view in both map groups
 function CreateMainWorldView(parent, mapGroup, mapGroupRight)
+    -- feature: preserve the world camera when changing views
+    ---@type UserCamera
+    local worldCamera = GetCamera('WorldCamera')
+
+    ---@type UserCameraSettings | nil
+    local worldCameraSettings = nil
+    if worldCamera then
+        worldCameraSettings = worldCamera:SaveSettings()
+    end
+
     if viewLeft then
         viewLeft:Destroy()
         viewLeft = false
@@ -175,6 +209,15 @@ function CreateMainWorldView(parent, mapGroup, mapGroupRight)
         view:DisableHitTest()
         LayoutHelpers.FillParent(view, viewLeft)
     end
+
+    -- feature: preserve the world camera when changing views
+    if worldCameraSettings then
+        local newWorldCamera = GetCamera('WorldCamera')
+        if newWorldCamera then
+            newWorldCamera:RestoreSettings(worldCameraSettings)
+        end
+    end
+
     import("/lua/ui/game/multifunction.lua").RefreshMapDialog()
 end
 
@@ -278,9 +321,10 @@ function UnlockInput()
     end
 end
 
--- this function is called by the engine so it can not be removed (its logic could be changed though)
+--- This function is called by the engine so it cannot be removed (its logic could be changed though)
+---@return boolean
 function IsInputLocked()
-    return (viewLeft and viewLeft:IsInputLocked()) or (viewRight and viewRight:IsInputLocked())
+    return (viewLeft and viewLeft:IsInputLocked()) or (viewRight and viewRight:IsInputLocked()) or false
 end
 
 function ForwardMouseWheelInput(event)
@@ -291,6 +335,7 @@ function ForwardMouseWheelInput(event)
     end
 end
 
+---@param val boolean
 function SetHighlightEnabled(val)
     if viewLeft then
         viewLeft:SetHighlightEnabled(val)
@@ -306,6 +351,7 @@ function ToggleMainCartographicView()
     end
 end
 
+---@param view WorldView
 function RegisterWorldView(view)
     if not MapControls[view._cameraName] then MapControls[view._cameraName] = {} end
     MapControls[view._cameraName] = view
@@ -317,12 +363,33 @@ function RegisterWorldView(view)
     end
 end
 
+---@param view WorldView
 function UnregisterWorldView(view)
     if MapControls[view._cameraName] then
         MapControls[view._cameraName] = nil
     end
 end
 
+---@return table<string, WorldView>
 function GetWorldViews()
     return MapControls
+end
+
+--- Returns the top-most WorldView at a screen location
+---@param screenPosX number
+---@param screenPosY number
+---@return WorldView
+function GetTopmostWorldViewAt(screenPosX, screenPosY)
+    local topView = nil
+    local topViewDepth = nil
+    for _, worldView in MapControls do
+        if worldView:HitTest(screenPosX, screenPosY) and worldView.Depth() > topViewDepth then
+            local viewDepth = worldView.Depth()
+            if viewDepth > topViewDepth then
+                topView = worldView
+                topViewDepth = viewDepth
+            end
+        end
+    end
+    return topView
 end

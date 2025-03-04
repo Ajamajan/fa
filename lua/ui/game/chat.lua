@@ -789,7 +789,7 @@ end
 
 function ChatPageUp(mod)
     if GUI.bg:IsHidden() then
-        ForkThread(function() ToggleChat() end)
+        ForkThread(ToggleChat)
     else
         local newTop = GUI.chatContainer.top - mod
         GUI.chatContainer:ScrollSetTop(nil, newTop)
@@ -801,12 +801,11 @@ function ChatPageDown(mod)
     local newTop = GUI.chatContainer.top + mod
     GUI.chatContainer:ScrollSetTop(nil, newTop)
     if GUI.bg:IsHidden() or oldTop == GUI.chatContainer.top then
-        ForkThread(function() ToggleChat() end)
+        ForkThread(ToggleChat)
     end
 end
 
 function ReceiveChat(sender, msg)
-    LOG("ReceiveChat: ", repru(sender), repru(msg))
     if not msg.ConsoleOutput then
         SimCallback({Func="GiveResourcesToPlayer", Args={ From=GetFocusArmy(), To=GetFocusArmy(), Mass=0, Energy=0, Sender=sender, Msg=msg},} , true)
     end

@@ -2,15 +2,15 @@
 --** Shared under the MIT license
 --**************************************************************************************************
 
--- import recall parameters
+-- collect recall parameters (note it is not imported)
 doscript "/lua/shared/RecallParams.lua"
 
 -- TODO: generalize to abstract voting system, decoupled from recall
 
 local SyncAnnouncement = import("/lua/simdiplomacy.lua").SyncAnnouncement
 
-
----@alias CannotRecallReason false
+---@alias CannotRecallReason 
+---| false
 ---| "active"
 ---| "ai"
 ---| "gate"
@@ -18,7 +18,6 @@ local SyncAnnouncement = import("/lua/simdiplomacy.lua").SyncAnnouncement
 ---| "scenario"
 ---| "vote"
 ---| "observer"
-
 
 function init()
     -- setup sim recall state in the brains
@@ -34,58 +33,34 @@ function init()
 end
 
 function OnArmyChange()
-    local focus = GetFocusArmy()
-    if focus == -1 then
+    if GetFocusArmy() == -1 then
         SyncCancelRecallVote()
         SyncRecallStatus()
-        return
+    else
+        ResyncRecallVoting()
     end
-    local teamSize = 0
-    local yes, no = 0, 0
-    local votingThreadBrain
-    for index, brain in ArmyBrains do
-        if IsAlly(focus, index) and not ArmyIsCivilian(index) then
-            -- Found a voting thread. We really do need a better way to handle team data...
-            teamSize = teamSize + 1
-            if brain.Vote ~= nil then
-                if brain.Vote then
-                    yes = yes + 1
-                else
-                    no = no + 1
-                end
-            end
-            if brain.recallVotingThread then
-                votingThreadBrain = brain
-            end
-        end
+end
+
+---@param army integer
+function OnArmyDefeat(army)
+    local focus = GetFocusArmy()
+    if focus ~= -1 and IsAlly(army, focus) then
+        -- the rest of the code knows to ignore defeated players, just resync so the
+        -- UI can update the number of blocks
+        ResyncRecallVoting()
     end
-    if votingThreadBrain then
-        Sync.RecallRequest = {
-            StartTime = votingThreadBrain.RecallVoteStartTime,
-            Open = VoteTime * 0.1,
-            Blocks = teamSize,
-            -- TODO: rename to `Yes` and `No`
-            Accept = yes,
-            Veto = no,
-            CanVote = GetArmyBrain(focus).Vote ~= nil,
-        }
-    end
-    SyncRecallStatus()
 end
 
 ---@param data {From: number, To: number}
 function OnAllianceChange(data)
     local armyFrom, armyTo = data.From, data.To
-    local oldTeammates = 0
+    local oldTeamSize = 0
     local oldTeam = {}
     local votingThreadBrain
     for index, ally in ArmyBrains do
-        if (IsAlly(armyFrom, index) or IsAlly(armyTo, index))
-            and not ally:IsDefeated()
-            and not ArmyIsCivilian(index)
-        then
-            oldTeammates = oldTeammates + 1
-            oldTeam[oldTeammates] = ally.Nickname
+        if (IsAlly(armyFrom, index) or IsAlly(armyTo, index)) and not ArmyIsCivilian(index) then
+            oldTeamSize = oldTeamSize + 1
+            oldTeam[oldTeamSize] = ally.Nickname
             -- Found a voting thread. We really do need a better way to handle team data...
             if ally.recallVotingThread then
                 votingThreadBrain = ally
@@ -94,8 +69,8 @@ function OnAllianceChange(data)
     end
     if votingThreadBrain then
         SPEW("Canceling recall voting for team " .. table.concat(oldTeam, ", ") .. " due to alliance break")
-        votingThreadBrain.VoteCancelled = true
-        coroutine.resume(votingThreadBrain.recallVotingThread)
+        votingThreadBrain.RecallVoteCancelled = true
+        ResumeThread(votingThreadBrain.recallVotingThread)
         if IsAlly(votingThreadBrain, GetFocusArmy()) then
             SyncCancelRecallVote()
             SyncRecallStatus()
@@ -104,15 +79,16 @@ function OnAllianceChange(data)
 end
 
 
+
 ---@param lastTeamVote number
 ---@param lastPlayerRequest number
 ---@param playerGatein? number
 ---@return CannotRecallReason CannotRecallReason
 ---@return number? cooldown
-function RecallRequestCooldown(lastTeamVote, lastPlayerRequest, playerGatein)
+local function RecallRequestCooldown(lastTeamVote, lastPlayerRequest, playerGatein)
     -- note that this doesn't always return the reason that currently has the longest cooldown, it
     -- returns the more "fundamental" one (i.e. the reason whose base cooldown is longest)
-    -- this is more useful in reporting the reason, and isn't a problem when put in a loop
+    -- this is more useful in reporting the reason, and isn't a problem as the reason checker is a loop
     local gametime = GetGameTick()
     local gateCooldown = (playerGatein or 0) + PlayerGateCooldown - gametime
     if gateCooldown > 0 then
@@ -138,7 +114,12 @@ function ArmyRecallRequestCooldown(army)
     if army == -1 then
         return "observer"
     end
+
     local brain = GetArmyBrain(army)
+
+    if brain:IsDefeated() then
+        return "observer"
+    end
     if ScenarioInfo.RecallDisabled then
         return "scenario"
     end
@@ -173,12 +154,12 @@ local function RecallVotingThread(requestingArmy)
     WaitTicks(VoteTime) -- may be interrupted if the vote closes or is canceled by an alliance break
 
     local focus = GetFocusArmy()
-    if requestingBrain.VoteCancelled then
+    if requestingBrain.RecallVoteCancelled then
         if focus ~= -1 and IsAlly(requestingArmy, focus) then
             SyncCancelRecallVote()
             SyncRecallStatus()
         end
-        requestingBrain.VoteCancelled = nil
+        requestingBrain.RecallVoteCancelled = nil
         requestingBrain.RecallVoteStartTime = nil
         requestingBrain.recallVotingThread = nil
         return
@@ -186,21 +167,31 @@ local function RecallVotingThread(requestingArmy)
 
     local gametick = GetGameTick()
     local yesVotes = 0
-    local teammates = 0
+    local noVotes = 0
+    local teamSize = 0
     local team = {}
     for index, brain in ArmyBrains do
-        if not brain:IsDefeated() and IsAlly(requestingArmy, brain.Army) and not ArmyIsCivilian(index) then
-            teammates = teammates + 1
-            team[teammates] = brain
-            if brain.RecallVote then
-                yesVotes = yesVotes + 1
+        if not IsAlly(requestingArmy, brain.Army) or ArmyIsCivilian(index) then
+            continue
+        end
+
+        if not brain:IsDefeated() then
+            teamSize = teamSize + 1
+            team[teamSize] = brain
+            if brain.RecallVote ~= nil then
+                if brain.RecallVote then
+                    yesVotes = yesVotes + 1
+                else
+                    noVotes = noVotes + 1
+                end
             end
-            brain.RecallVote = nil
             brain.LastRecallVoteTime = gametick
         end
+        brain.RecallVote = nil -- make sure defeated players get reset too
     end
+
     -- this function is found in the recall params file, for those looking
-    local recallPassed = RecallRequestAccepted(yesVotes, teammates)
+    local recallPassed = RecallRequestAccepted(yesVotes, teamSize)
     if focus ~= -1 and IsAlly(focus, requestingArmy) then
         SyncCloseRecallVote(recallPassed)
         -- the recall UI will handle the announcement in this case
@@ -211,19 +202,22 @@ local function RecallVotingThread(requestingArmy)
             Team = requestingBrain.Nickname,
         }
     end
+
     local listTeam = team[1].Nickname
-    for i = 2, teammates do
+    for i = 2, teamSize do
         listTeam = listTeam .. ", " .. team[i].Nickname
     end
+    local msgEnding = yesVotes .. " to " .. noVotes .. " [" .. (teamSize - yesVotes - noVotes) .. " abstained] )"
     if recallPassed then
-        SPEW("Recalling team " .. listTeam .. " at the request of " .. requestingBrain.Nickname .. " (vote passed " .. yesVotes .. " to " .. (teammates - yesVotes ) .. ")")
+        SPEW("Recalling team " .. listTeam .. " at the request of " .. requestingBrain.Nickname .. " (vote passed " .. msgEnding)
         for _, brain in team do
             brain:RecallAllCommanders()
         end
     else
-        SPEW("Not recalling team " .. listTeam .. " (vote failed " .. yesVotes .. " to " .. (teammates - yesVotes ) .. ")")
+        SPEW("Not recalling team " .. listTeam .. " (vote failed " .. msgEnding)
         requestingBrain.LastRecallRequestTime = gametick
     end
+
     if focus ~= -1 and IsAlly(requestingArmy, focus) then
         -- update UI once the cooldown dissipates
         SyncRecallStatus()
@@ -238,15 +232,19 @@ end
 ---@return boolean # if further user sync should happen
 local function ArmyVoteRecall(army, vote, lastVote)
     if lastVote then
+        local foundThread = false
         for index, ally in ArmyBrains do
-            if army ~= index and IsAlly(army, index) and not ally:IsDefeated() then
+            if army ~= index and IsAlly(army, index) then
                 local thread = ally.recallVotingThread
                 if thread then
-                    -- end voting period
-                    ResumeThread(thread)
+                    ResumeThread(thread) -- end voting period
+                    foundThread = true
                     break
                 end
             end
+        end
+        if not foundThread then
+            SPEW("Unable to find recall voting thread for " .. GetArmyBrain(army).Nickname .. '!')
         end
     end
 
@@ -272,9 +270,7 @@ local function ArmyRequestRecall(army, teammates)
         end
     else
         -- it's just us; recall our army
-        SPEW("Recalling " .. brain.Nickname)
         brain:RecallAllCommanders()
-
     end
 end
 
@@ -291,30 +287,44 @@ function SetRecallVote(data)
         end
         return
     end
+    local brain = GetArmyBrain(army)
+    if brain:IsDefeated() then
+        SyncCannotRequestRecall("observer")
+        SPEW("Defeated army " .. tostring(army) .. " (" .. GetArmyBrain(army).Nickname .. ") trying to vote for recall!")
+        return
+    end
     local vote = data.Vote and true or false
 
     -- determine team voting status
     local isRequest = true
     local lastVote = true
+    local likeVotes = 0
     local teammates = 0
     local team = {}
     for index, ally in ArmyBrains do
-        if army ~= index and not ally:IsDefeated() and IsAlly(army, index) and not ArmyIsCivilian(index) then
-            if ally.BrainType ~= "Human" then
-                if army == focus then
-                    SyncCannotRequestRecall("ai")
+        if army ~= index and IsAlly(army, index) and not ArmyIsCivilian(index) then
+            if not ally:IsDefeated() then
+                if ally.BrainType ~= "Human" then
+                    if army == focus then
+                        SyncCannotRequestRecall("ai")
+                    end
+                    return
                 end
-                return
+                if ally.RecallVote == vote then
+                    likeVotes = likeVotes + 1
+                end
+
+                local allyHasVoted = ally.RecallVote ~= nil
+                lastVote = lastVote and allyHasVoted -- only the last vote if all allies have also voted
+                isRequest = isRequest and not allyHasVoted -- only a request if no allies have voted yet
+                teammates = teammates + 1
+                team[teammates] = ally.Nickname
+            elseif ally.recallVotingThread then
+                isRequest = false
             end
-            local allyHasVoted = ally.RecallVote ~= nil
-            lastVote = lastVote and allyHasVoted -- only the last vote if all allies have also voted
-            isRequest = isRequest and not allyHasVoted -- only the last vote if no allies have voted
-            teammates = teammates + 1
-            team[teammates] = ally.Nickname
         end
     end
 
-    local brain = GetArmyBrain(army)
     if isRequest then
         -- the player is making a recall request; this will reset their recall request cooldown
         local reason = ArmyRecallRequestCooldown(army)
@@ -324,97 +334,151 @@ function SetRecallVote(data)
             end
             return
         end
-        SPEW("Army " .. tostring(army) .. " is requesting recall for " .. table.concat(team, ','))
+        if teammates > 0 then
+            SPEW("Recall request from " .. brain.Nickname .. " for " .. table.concat(team, ", "))
+        else
+            SPEW("Recalling " .. brain.Nickname)
+        end
         brain.RecallVote = vote
         ArmyRequestRecall(army, teammates)
     else
         -- the player is responding to a recall request; we don't count this against their
         -- individual recall request cooldown
-        SPEW("Army " .. tostring(army) .. " recall vote: " .. (vote and "yes" or "no"))
+        SPEW("Recall vote for " .. brain.Nickname .. ": " .. (vote and "yes" or "no"))
         brain.RecallVote = vote
+
+        -- if the vote will already be decided with this vote, close the voting session
+        if not lastVote then
+            if vote then
+                -- will succeed with our vote
+                lastVote = RecallRequestAccepted(likeVotes + 1, teammates + 1)
+            else
+                -- won't ever be able to succeed
+                -- teammates - votes against = teammates that could vote for recall
+                lastVote = not RecallRequestAccepted(teammates + 1 - (likeVotes + 1), teammates + 1)
+            end
+        end
         ArmyVoteRecall(army, vote, lastVote)
     end
 end
 
 
+--------------------
+--#region Sync
+--------------------
+
+local function GetRecallSyncTable()
+    local sync = Sync.RecallRequest
+    if not sync then
+        sync = {}
+        Sync.RecallRequest = sync
+    end
+    return sync
+end
+
+function ResyncRecallVoting()
+    local focus = GetFocusArmy()
+    local teamSize = 0
+    local yes, no = 0, 0
+    local votingThreadBrain
+    local retainBlocks = false
+    for index, brain in ArmyBrains do
+        if IsAlly(focus, index) and not ArmyIsCivilian(index) then
+            -- Found a voting thread. We really do need a better way to handle team data...
+            if brain.recallVotingThread then
+                votingThreadBrain = brain
+                if brain:IsDefeated() then
+                    retainBlocks = true
+                end
+            end
+            -- it's possible a defeated player could have been the one to initiate the vote but 
+            -- they don't count for votes
+            if brain:IsDefeated() then
+                continue
+            end
+            teamSize = teamSize + 1
+            if brain.RecallVote ~= nil then
+                if brain.RecallVote then
+                    yes = yes + 1
+                else
+                    no = no + 1
+                end
+            end
+        end
+    end
+    if votingThreadBrain then
+        -- keep the block layout in the edge-case that there are 3 (or more) players
+        -- and the original requester is defeated so there are only 2 players - both
+        -- could still need to vote so the confirmation layout is inappropriate
+        if teamSize <= 2 and not retainBlocks then
+            teamSize = nil
+        end
+
+        local focusBrain = GetArmyBrain(focus)
+
+        -- no need to add changes from `GetRecallSyncTable`, we need to reset everything anyway
+        Sync.RecallRequest = {
+            StartTime = votingThreadBrain.RecallVoteStartTime * 0.1, -- convert ticks to seconds
+            Open = VoteTime * 0.1, -- convert ticks to seconds
+            Blocks = teamSize,
+            Yes = yes,
+            No = no,
+            CanVote = focusBrain.RecallVote == nil and not focusBrain:IsDefeated(),
+        }
+    end
+    SyncRecallStatus()
+end
+
 ---@param reason CannotRecallReason
 function SyncCannotRequestRecall(reason)
-    local recallSync = Sync.RecallRequest
-    if not recallSync then
-        Sync.RecallRequest = {CannotRequest = reason}
-    else
-        recallSync.CannotRequest = reason
-    end
+    GetRecallSyncTable().CannotRequest = reason
 end
 
 ---@param result boolean
 function SyncCloseRecallVote(result)
-    local recallSync = Sync.RecallRequest
-    if not recallSync then
-        Sync.RecallRequest = {Close = result}
-    else
-        recallSync.Close = result
-    end
+    GetRecallSyncTable().Close = result
 end
 
 function SyncCancelRecallVote()
-    local recallSync = Sync.RecallRequest
-    if not recallSync then
-        Sync.RecallRequest = {Cancel = true}
-    else
-        recallSync.Cancel = true
-    end
+    GetRecallSyncTable().Cancel = true
 end
 
 ---@param vote boolean
 function SyncRecallVote(vote)
-    local recallSync = Sync.RecallRequest
-    if not recallSync then
-        recallSync = {}
-        Sync.RecallRequest = recallSync
-    end
+    local sync = GetRecallSyncTable()
     if vote then
-        recallSync.Accept = (recallSync.Accept or 0) + 1
+        sync.Yes = (sync.Yes or 0) + 1
     else
-        recallSync.Veto = (recallSync.Veto or 0) + 1
+        sync.No = (sync.No or 0) + 1
     end
 end
 
 ---@param teamSize number
 ---@param army number
 function SyncOpenRecallVote(teamSize, army)
-    local recallSync = Sync.RecallRequest
-    if not recallSync then
-        recallSync = {}
-        Sync.RecallRequest = recallSync
-    end
+    local sync = GetRecallSyncTable()
     local focus = GetFocusArmy()
-    recallSync.Open = VoteTime * 0.1
-    recallSync.CanVote = focus ~= -1 and army ~= focus
-    recallSync.Blocks = teamSize
+    sync.Open = VoteTime * 0.1 -- convert ticks to seconds
+    sync.CanVote = focus ~= -1 and army ~= focus and not GetArmyBrain(focus):IsDefeated()
+    if teamSize > 2 then
+        sync.Blocks = teamSize
+    end
 end
 
 local UserRecallStatusThread
 
 local function SyncRecallStatusThread()
     local reason, cooldown = ArmyRecallRequestCooldown(GetFocusArmy())
-    while reason do
+    while cooldown do
         SyncCannotRequestRecall(reason)
-        if not cooldown then
-            UserRecallStatusThread = nil
-            return
-        end
+
         -- may be interrupted for various reasons, such as the focus army changing
         -- this will be fine, we'll pick up the proper cooldown reason anyway and loop again
-        if cooldown < 1 then
-            WaitTicks(1)
-        else
-            WaitTicks(cooldown)
-        end
+        WaitTicks(math.max(1, cooldown))
 
         reason, cooldown = ArmyRecallRequestCooldown(GetFocusArmy())
     end
-    SyncCannotRequestRecall(false)
+    SyncCannotRequestRecall(reason)
     UserRecallStatusThread = nil
 end
 
@@ -425,3 +489,5 @@ function SyncRecallStatus()
         UserRecallStatusThread = ForkThread(SyncRecallStatusThread)
     end
 end
+
+--#endregion

@@ -48,6 +48,49 @@ local IEffectSetEmitterCurveParam = moho.IEffect.SetEmitterCurveParam
 local IEffectSetEmitterParam = moho.IEffect.SetEmitterParam
 local TrashBagAdd = TrashBag.Add
 
+--#region Optimized functions
+
+local EffectUtilitiesOpti = import("/lua/effectutilitiesopti.lua")
+local EffectUtilitiesUEF = import("/lua/effectutilitiesuef.lua")
+local EffectUtilitiesGeneric = import("/lua/effectutilitiesgeneric.lua")
+local EffectUtilitiesAeon = import("/lua/effectutilitiesaeon.lua")
+
+CreateCybranEngineerBuildEffectsOpti = EffectUtilitiesOpti.CreateCybranEngineerBuildEffects
+CreateCybranBuildBeamsOpti = EffectUtilitiesOpti.CreateCybranBuildBeams
+SpawnBuildBotsOpti = EffectUtilitiesOpti.SpawnBuildBots
+
+CreateAeonBuildBaseThread = EffectUtilitiesAeon.CreateAeonBuildBaseThread
+CreateAeonConstructionUnitBuildingEffects = EffectUtilitiesAeon.CreateAeonConstructionUnitBuildingEffects
+CreateAeonCommanderBuildingEffects = EffectUtilitiesAeon.CreateAeonCommanderBuildingEffects
+CreateAeonFactoryBuildingEffects = EffectUtilitiesAeon.CreateAeonFactoryBuildingEffects
+CreateAeonColossusBuildingEffects = EffectUtilitiesAeon.CreateAeonColossusBuildingEffects
+CreateAeonCZARBuildingEffects = EffectUtilitiesAeon.CreateAeonCZARBuildingEffects
+CreateAeonTempestBuildingEffects = EffectUtilitiesAeon.CreateAeonTempestBuildingEffects
+CreateAeonParagonBuildingEffects = EffectUtilitiesAeon.CreateAeonParagonBuildingEffects
+
+CreateEffectsOpti = EffectUtilitiesGeneric.CreateEffectsOpti
+CreateEffectsInTrashbag = EffectUtilitiesGeneric.CreateEffectsInTrashbag
+CreateEffectsWithOffsetOpti = EffectUtilitiesGeneric.CreateEffectsWithOffsetOpti
+CreateEffectsWithOffsetInTrashbag = EffectUtilitiesGeneric.CreateEffectsWithOffsetInTrashbag
+CreateEffectsWithRandomOffsetOpti = EffectUtilitiesGeneric.CreateEffectsWithRandomOffsetOpti
+CreateEffectsWithRandomOffsetInTrashbag = EffectUtilitiesGeneric.CreateEffectsWithRandomOffsetInTrashbag
+CreateBoneEffectsOpti = EffectUtilitiesGeneric.CreateBoneEffectsOpti
+CreateBoneEffectsInTrashbag = EffectUtilitiesGeneric.CreateBoneEffectsInTrashbag
+CreateBoneEffectsOffsetOpti = EffectUtilitiesGeneric.CreateBoneEffectsOffsetOpti
+CreateBoneEffectsOffsetInTrashbag = EffectUtilitiesGeneric.CreateBoneEffectsOffsetInTrashbag
+CreateRandomEffectsOpti = EffectUtilitiesGeneric.CreateRandomEffectsOpti
+CreateRandomEffectsInTrashbag = EffectUtilitiesGeneric.CreateRandomEffectsInTrashbag
+PlayReclaimEffects = EffectUtilitiesGeneric.PlayReclaimEffects
+PlayReclaimEndEffects = EffectUtilitiesGeneric.PlayReclaimEndEffects
+ApplyWindDirection = EffectUtilitiesGeneric.ApplyWindDirection
+
+CreateDefaultBuildBeams = EffectUtilitiesUEF.CreateDefaultBuildBeams
+CreateUEFBuildSliceBeams = EffectUtilitiesUEF.CreateUEFBuildSliceBeams
+CreateUEFUnitBeingBuiltEffects = EffectUtilitiesUEF.CreateUEFUnitBeingBuiltEffects
+CreateUEFCommanderBuildSliceBeams = EffectUtilitiesUEF.CreateUEFCommanderBuildSliceBeams
+CreateBuildCubeThread = EffectUtilitiesUEF.CreateBuildCubeThread
+--#endregion
+
 -- local DeprecatedWarnings = { }
 
 ---@alias AdjacencyBeam {Unit: Unit, Trash: TrashBag}
@@ -336,10 +379,10 @@ local UnitBuildEffects = {
 --- Creates the Cybran factor build effects
 ---@param builder Unit
 ---@param unitBeingBuilt Unit
----@param buildBones Bone[]
+---@param buildBones BuildBones
 ---@param buildEffectsBag TrashBag
 function CreateCybranFactoryBuildEffects(builder, unitBeingBuilt, buildBones, buildEffectsBag)
-    CreateCybranBuildBeamsOpti(builder, nil, unitBeingBuilt, buildEffectsBag, false)
+    TrashBagAdd(buildEffectsBag, ForkThread(CreateCybranBuildBeamsOpti, builder, nil, unitBeingBuilt, buildEffectsBag, false))
 
     local builderArmy = builder.Army
     for _, bone in buildBones.BuildEffectBones do
@@ -1033,7 +1076,7 @@ function PlayTeleportChargingEffects(unit, teleDest, effectsBag, teleDelay)
             for _, effect in telefx do
                 local fx = CreateEmitterAtEntity(teleportDestFxEntity, unitArmy, effect)
                 IEffectOffsetEmitter(fx, 0, offsetY, 0)
-                IEffectScaleEmitter(fx, 0.75)
+                IEffectScaleEmitter(fx, 0.9375)
                 IEffectSetEmitterCurveParam(fx, 'Y_POSITION_CURVE', 0, offsetY * 2) -- To make effects cover entire height of unit
                 IEffectSetEmitterCurveParam(fx, 'ROTATION_RATE_CURVE', 1, 0) -- Small initial rotation, will be faster as charging
                 TableInsert(unit.TeleportDestChargeBag, fx)
@@ -1048,7 +1091,7 @@ function PlayTeleportChargingEffects(unit, teleDest, effectsBag, teleDelay)
 
             for _, effect in telefx do
                 local fx = CreateEmitterAtEntity(sphere, unitArmy, effect)
-                IEffectScaleEmitter(fx, 0.01 * unit.TeleportCybranSphereScale)
+                IEffectScaleEmitter(fx, 0.0125 * unit.TeleportCybranSphereScale)
                 TableInsert(unit.TeleportDestChargeBag, fx)
                 TrashBagAdd(effectsBag, fx)
             end
@@ -1057,7 +1100,7 @@ function PlayTeleportChargingEffects(unit, teleDest, effectsBag, teleDelay)
             for _, effect in telefx do
                 local fx = CreateEmitterAtEntity(teleportDestFxEntity, unitArmy, effect)
                 IEffectOffsetEmitter(fx, 0, offsetY, 0)
-                IEffectScaleEmitter(fx, 0.01)
+                IEffectScaleEmitter(fx, 0.0125)
                 TableInsert(unit.TeleportDestChargeBag, fx)
                 TrashBagAdd(effectsBag, fx)
             end
@@ -1068,7 +1111,7 @@ function PlayTeleportChargingEffects(unit, teleDest, effectsBag, teleDelay)
             for _, effect in telefx do
                 local fx = CreateEmitterAtEntity(teleportDestFxEntity, unitArmy, effect)
                 IEffectOffsetEmitter(fx, 0, offsetY, 0)
-                IEffectScaleEmitter(fx, 0.01)
+                IEffectScaleEmitter(fx, 0.0125)
                 TableInsert(unit.TeleportDestChargeBag, fx)
                 TrashBagAdd(effectsBag, fx)
             end
@@ -1152,7 +1195,7 @@ end
 function TeleportCreateCybranSphere(unit, location, initialScale)
     -- Creates the sphere used by Cybran teleportation effects
     local sx, sy, sz = TeleportGetUnitSizes(unit)
-    local scale = 1.25 * MathMax(sx, sy, sz)
+    local scale = 1.5625 * MathMax(sx, sy, sz)
     unit.TeleportCybranSphereScale = scale
 
     local sphere = Entity()
@@ -1185,7 +1228,7 @@ function TeleportChargingProgress(unit, fraction)
             if unit.TeleportDestChargeBag then
                 local height = -(25 + 100 * fraction)
                 local size = 30 * fraction
-                local scale = 0.75 + 0.5 * MathMax(fraction, 0.01)
+                local scale = 0.9375 + 0.625 * MathMax(fraction, 0.01)
                 for _, fx in unit.TeleportDestChargeBag do
                     IEffectSetEmitterCurveParam(fx, 'ROTATION_RATE_CURVE', height, size)
                     IEffectScaleEmitter(fx, scale)
@@ -1198,7 +1241,7 @@ function TeleportChargingProgress(unit, fraction)
             end
         elseif faction == 'Cybran' then
             -- Increase size of sphere and effects as progressing
-            local scale = MathMax(fraction, 0.01) * (unit.TeleportCybranSphereScale or 5)
+            local scale = fraction * (unit.TeleportCybranSphereScale or 6.25)
             if unit.TeleportCybranSphere then
                 unit.TeleportCybranSphere:SetDrawScale(scale)
             end
@@ -1209,7 +1252,7 @@ function TeleportChargingProgress(unit, fraction)
             end
         elseif unit.TeleportDestChargeBag then
             -- Increase size of effects as progressing
-            local scale = 2 * fraction - MathPow(fraction, 2)
+            local scale = 2.5 * fraction - MathPow(fraction, 2.5)
             for _, fx in unit.TeleportDestChargeBag do
                 IEffectScaleEmitter(fx, scale)
             end
@@ -1477,45 +1520,3 @@ function DestroyRemainingTeleportChargingEffects(unit, effectsBag)
         unit.TeleportCybranSphere:Destroy()
     end
 end
-
---- Optimized functions --
-
-local EffectUtilitiesOpti = import("/lua/effectutilitiesopti.lua")
-local EffectUtilitiesUEF = import("/lua/effectutilitiesuef.lua")
-local EffectUtilitiesGeneric = import("/lua/effectutilitiesgeneric.lua")
-local EffectUtilitiesAeon = import("/lua/effectutilitiesaeon.lua")
-
-CreateCybranEngineerBuildEffectsOpti = EffectUtilitiesOpti.CreateCybranEngineerBuildEffects
-CreateCybranBuildBeamsOpti = EffectUtilitiesOpti.CreateCybranBuildBeams
-SpawnBuildBotsOpti = EffectUtilitiesOpti.SpawnBuildBots
-
-CreateAeonBuildBaseThread = EffectUtilitiesAeon.CreateAeonBuildBaseThread
-CreateAeonConstructionUnitBuildingEffects = EffectUtilitiesAeon.CreateAeonConstructionUnitBuildingEffects
-CreateAeonCommanderBuildingEffects = EffectUtilitiesAeon.CreateAeonCommanderBuildingEffects
-CreateAeonFactoryBuildingEffects = EffectUtilitiesAeon.CreateAeonFactoryBuildingEffects
-CreateAeonColossusBuildingEffects = EffectUtilitiesAeon.CreateAeonColossusBuildingEffects
-CreateAeonCZARBuildingEffects = EffectUtilitiesAeon.CreateAeonCZARBuildingEffects
-CreateAeonTempestBuildingEffects = EffectUtilitiesAeon.CreateAeonTempestBuildingEffects
-CreateAeonParagonBuildingEffects = EffectUtilitiesAeon.CreateAeonParagonBuildingEffects
-
-CreateEffectsOpti = EffectUtilitiesGeneric.CreateEffectsOpti
-CreateEffectsInTrashbag = EffectUtilitiesGeneric.CreateEffectsInTrashbag
-CreateEffectsWithOffsetOpti = EffectUtilitiesGeneric.CreateEffectsWithOffsetOpti
-CreateEffectsWithOffsetInTrashbag = EffectUtilitiesGeneric.CreateEffectsWithOffsetInTrashbag
-CreateEffectsWithRandomOffsetOpti = EffectUtilitiesGeneric.CreateEffectsWithRandomOffsetOpti
-CreateEffectsWithRandomOffsetInTrashbag = EffectUtilitiesGeneric.CreateEffectsWithRandomOffsetInTrashbag
-CreateBoneEffectsOpti = EffectUtilitiesGeneric.CreateBoneEffectsOpti
-CreateBoneEffectsInTrashbag = EffectUtilitiesGeneric.CreateBoneEffectsInTrashbag
-CreateBoneEffectsOffsetOpti = EffectUtilitiesGeneric.CreateBoneEffectsOffsetOpti
-CreateBoneEffectsOffsetInTrashbag = EffectUtilitiesGeneric.CreateBoneEffectsOffsetInTrashbag
-CreateRandomEffectsOpti = EffectUtilitiesGeneric.CreateRandomEffectsOpti
-CreateRandomEffectsInTrashbag = EffectUtilitiesGeneric.CreateRandomEffectsInTrashbag
-PlayReclaimEffects = EffectUtilitiesGeneric.PlayReclaimEffects
-PlayReclaimEndEffects = EffectUtilitiesGeneric.PlayReclaimEndEffects
-ApplyWindDirection = EffectUtilitiesGeneric.ApplyWindDirection
-
-CreateDefaultBuildBeams = EffectUtilitiesUEF.CreateDefaultBuildBeams
-CreateUEFBuildSliceBeams = EffectUtilitiesUEF.CreateUEFBuildSliceBeams
-CreateUEFUnitBeingBuiltEffects = EffectUtilitiesUEF.CreateUEFUnitBeingBuiltEffects
-CreateUEFCommanderBuildSliceBeams = EffectUtilitiesUEF.CreateUEFCommanderBuildSliceBeams
-CreateBuildCubeThread = EffectUtilitiesUEF.CreateBuildCubeThread

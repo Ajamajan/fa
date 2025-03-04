@@ -12,7 +12,7 @@ local CPlatoon = {}
 --- Orders platoon to attack target unit.
 -- If squad is specified, attacks only with the squad.
 ---@param target Unit Unit to attack.
----@param squad PlatoonSquadType
+---@param squad? PlatoonSquadType
 ---@return PlatoonCommand
 function CPlatoon:AttackTarget(target, squad)
 end
@@ -20,7 +20,7 @@ end
 --- Orders platoon to attack mote to target position..
 -- If squad is specified, attack moves only with the squad.
 ---@param position Vector Table with position {x, y, z}.
----@param squad PlatoonSquadType?
+---@param squad? PlatoonSquadType
 ---@return PlatoonCommand
 function CPlatoon:AggressiveMoveToLocation(position, squad)
 end
@@ -53,11 +53,11 @@ end
 
 --- TODO.
 -- Example: local formIt = poolPlatoon:CanFormPlatoon(template, personality:GetPlatoonSize(), self.Location, radius)
----@param template table
----@param size number
----@param location Vector
----@param radius number
-function CPlatoon:CanFormPlatoon(template, size, location, radius)
+---@param template table The template table for the faction, see platoontemplates for more details.
+---@param multiplier number Multiplies the squad max size in the template by this number.
+---@param location Vector The position vector to search for units from.
+---@param radius number The radius to search for units.
+function CPlatoon:CanFormPlatoon(template, multiplier, location, radius)
 end
 
 --- Destroys the platoon including all its units.
@@ -121,8 +121,12 @@ end
 
 --- TODO.
 -- Example: local hndl = poolPlatoon:FormPlatoon(template, personality:GetPlatoonSize(), self.Location, radius)
+---@param template table The template table for the faction, see platoontemplates for more details.
+---@param multiplier number Multiplies the squad max size in the template by this number.
+---@param position Vector The position vector to search for units from.
+---@param radius number The radius to search for units.
 -- @return Formed platoon
-function CPlatoon:FormPlatoon()
+function CPlatoon:FormPlatoon(template, multiplier, position, radius)
 end
 
 --- TODO.
@@ -252,7 +256,7 @@ end
 --- Orders platoon to patrol at target position.
 -- If squad is specified, patrols only with the squad.
 ---@param position Vector Table with position {x, y, z}.
----@param squad PlatoonSquadType
+---@param squad? PlatoonSquadType
 ---@return PlatoonCommand
 function CPlatoon:Patrol(position, squad)
 end

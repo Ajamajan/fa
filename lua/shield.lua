@@ -31,6 +31,8 @@ local Entity = import("/lua/sim/entity.lua").Entity
 local EffectTemplate = import("/lua/effecttemplates.lua")
 local Util = import("/lua/utilities.lua")
 
+local shieldAbsorptionValues = import("/lua/ShieldAbsorptionValues.lua").shieldAbsorptionValues
+
 local DeprecatedWarnings = {}
 
 local VectorCached = Vector(0, 0, 0)
@@ -40,6 +42,8 @@ local MathSqrt = math.sqrt
 local MathMin = math.min
 
 local TableAssimilate = table.assimilate
+local TableGetn = table.getn
+local TableEmpty = table.empty
 
 -- cache globals
 local Warp = Warp
@@ -57,6 +61,9 @@ local ArmyGetHandicap = ArmyGetHandicap
 local CoroutineYield = coroutine.yield
 local CreateEmitterAtBone = CreateEmitterAtBone
 local _c_CreateShield = _c_CreateShield
+local IssueClearCommands = IssueClearCommands
+local IssueRepair = IssueRepair
+local IssueGuard = IssueGuard
 
 -- cache cfunctions
 local EntityGetHealth = _G.moho.entity_methods.GetHealth
@@ -85,6 +92,8 @@ local EntitySetParentOffset = _G.moho.entity_methods.SetParentOffset
 local UnitSetScriptBit = _G.moho.unit_methods.SetScriptBit
 local UnitIsUnitState = _G.moho.unit_methods.IsUnitState
 local UnitRevertCollisionShape = _G.moho.unit_methods.RevertCollisionShape
+local UnitGetGuards = _G.moho.unit_methods.GetGuards
+local UnitGetCommandQueue = _G.moho.unit_methods.GetCommandQueue
 
 local IEffectOffsetEmitter = _G.moho.IEffect.OffsetEmitter
 
@@ -147,6 +156,8 @@ end
 ---@field PassOverkillDamage boolean
 ---@field ImpactMeshBp string
 ---@field SkipAttachmentCheck boolean
+---@field AbsorptionTypeDamageTypeToMulti table<DamageType, number>
+---@field DisallowCollisions boolean
 Shield = ClassShield(moho.shield_methods, Entity) {
 
     RemainEnabledWhenAttached = false,
@@ -184,6 +195,7 @@ Shield = ClassShield(moho.shield_methods, Entity) {
         self.PassOverkillDamage = spec.PassOverkillDamage
         self.ImpactMeshBp = spec.ImpactMesh
         self.SkipAttachmentCheck = spec.SkipAttachmentCheck
+        self.DisallowCollisions = false
 
         if spec.ImpactEffects ~= '' then
             self.ImpactEffects = EffectTemplate[spec.ImpactEffects]
@@ -211,13 +223,23 @@ Shield = ClassShield(moho.shield_methods, Entity) {
         -- attach us to the owner
         EntityAttachBoneTo(self, -1, spec.Owner, -1)
 
-        -- lookup as to whether we're static or a commander shield
-        local ownerCategories = self.Owner.Blueprint.CategoriesHash
+
+        -- lookup whether we're a static shield for absorbing deathnukes with modded shields that don't have the value set
+        local absorptionType = spec.AbsorptionType
+        -- lookup whether we're a static or a commander shield for overcharge's fixed damage
+        local ownerBp = self.Owner.Blueprint
+        local ownerCategories = ownerBp.CategoriesHash
         if ownerCategories.STRUCTURE then
             self.StaticShield = true
+            if not absorptionType then
+                absorptionType = "StaticShield"
+            end
         elseif ownerCategories.COMMAND then
             self.CommandShield = true
         end
+
+        -- lookup our damage absorption type's table
+        self.AbsorptionTypeDamageTypeToMulti = shieldAbsorptionValues[absorptionType or "Default"]
 
         -- use trashbag of the unit that owns us
         self.Trash = self.Owner.Trash
@@ -327,6 +349,7 @@ Shield = ClassShield(moho.shield_methods, Entity) {
 
         -- change state if we're enabled
         if self.Enabled then
+            self.DisallowCollisions = true
             ChangeState(self, self.EnergyDrainedState)
         end
     end,
@@ -337,13 +360,14 @@ Shield = ClassShield(moho.shield_methods, Entity) {
 
         -- change state if we're enabled
         if self.Enabled then
+            self.DisallowCollisions = false
             ChangeState(self, self.OnState)
         end
     end,
 
     --- Retrieves allied shields that overlap with this shield, caches the results per tick
     -- @param self A shield that we're computing the overlapping shields for
-    -- @param tick Optional parameter, represents the game tick. Used to determine if we need to refresh the cash
+    -- @param tick Optional parameter, represents the game tick. Used to determine if we need to refresh the cache
     GetOverlappingShields = function(self, tick)
 
         -- allow the game tick to be send to us, saves cycles
@@ -440,10 +464,22 @@ Shield = ClassShield(moho.shield_methods, Entity) {
     -- under the shield. The default is to always absorb as much as possible
     -- but the reason this function exists is to allow flexible implementations
     -- like shields that only absorb partial damage (like armor).
+    --- How much of incoming damage is absorbed by the shield. Used by the engine to calculate remainder spillover damage
+    ---@param self Shield
+    ---@param instigator Unit
+    ---@param amount number
+    ---@param type DamageType
+    ---@return number damageAbsorbed If not all damage is absorbed, the remainder passes to targets under the shield.
     OnGetDamageAbsorption = function(self, instigator, amount, type)
+        if type == "TreeForce" or type == "TreeFire" then
+            return amount
+        end
+        -- Allow decoupling the shield from the owner's armor multiplier
+        local absorptionMulti = self.AbsorptionTypeDamageTypeToMulti[type] or self.Owner:GetArmorMult(type)
+
         -- Like armor damage, first multiply by armor reduction, then apply handicap
         -- See SimDamage.cpp (DealDamage function) for how this should work
-        amount = amount * (self.Owner:GetArmorMult(type))
+        amount = amount * absorptionMulti
         amount = amount * (1.0 - ArmyGetHandicap(self.Army))
 
         local health = EntityGetHealth(self)
@@ -454,13 +490,19 @@ Shield = ClassShield(moho.shield_methods, Entity) {
         end
     end,
 
+    -- Used by PersonalShield and PersonalBubble to pass damage to the Owner Unit
+    ---@param self Shield
+    ---@param instigator Unit
+    ---@param amount number
+    ---@param type DamageType
+    ---@return number overkillDamage
     GetOverkill = function(self, instigator, amount, type)
         -- Like armor damage, first multiply by armor reduction, then apply handicap
         -- See SimDamage.cpp (DealDamage function) for how this should work
         amount = amount * (self.Owner:GetArmorMult(type))
         amount = amount * (1.0 - ArmyGetHandicap(self.Army))
         local finalVal = amount - EntityGetHealth(self)
-        if finalVal < 0 then
+        if finalVal < 0 or type == "FAF_AntiShield" then
             finalVal = 0
         end
         return finalVal
@@ -478,6 +520,12 @@ Shield = ClassShield(moho.shield_methods, Entity) {
         self:ApplyDamage(instigator, amount, vector, damageType, true)
     end,
 
+    ---@param self Shield
+    ---@param instigator Unit
+    ---@param amount number
+    ---@param vector Vector
+    ---@param dmgType DamageType
+    ---@param doOverspill boolean
     ApplyDamage = function(self, instigator, amount, vector, dmgType, doOverspill)
 
         -- cache information used throughout the function
@@ -486,12 +534,17 @@ Shield = ClassShield(moho.shield_methods, Entity) {
 
         -- damage correction for overcharge
 
+        -- If the absorption multiplier is less than 1, then the shield will get hit by two instances of area damage, the absorbed amount and the remainder.
+        -- This means that the following code then requires a multiplier to correct the total damage amount since both instances will be overriden.
+        -- For example with 0.25 absorption we would have a 0.25 damage and 0.75 damage instance hitting the shield. Both get set to 800 OC structure damage,
+        -- but then 0.25x armor is applied again (second OnGetDamageAbsorption call), reducing it to 2x200 damage, which requires a 2x multiplication to bring it to the expected 800.
+        -- Currently the absorption multiplier is 1, so we don't need a multiplier on the damage to balance it out.
+
         if dmgType == 'Overcharge' then
             local wep = instigator:GetWeaponByLabel('OverCharge')
-            if self.StaticShield then -- fixed damage for static shields
-                amount = wep:GetBlueprint().Overcharge.structureDamage * 2
-                -- Static shields absorbing 50% OC damage somehow, I don't want to change anything anywhere so just *2.
-            elseif self.CommandShield then --fixed damage for all ACU shields
+            if self.StaticShield then
+                amount = wep:GetBlueprint().Overcharge.structureDamage
+            elseif self.CommandShield then
                 amount = wep:GetBlueprint().Overcharge.commandDamage
             end
         end
@@ -529,11 +582,31 @@ Shield = ClassShield(moho.shield_methods, Entity) {
 
         -- do damage logic for shield
 
-        if self.Owner ~= instigator then
+        local owner = self.Owner
+        if owner ~= instigator then
             local absorbed = self:OnGetDamageAbsorption(instigator, amount, dmgType)
 
             -- take some damage
             EntityAdjustHealth(self, instigator, -absorbed)
+
+            -- force guards to start repairing in 1 tick instead of waiting for them to react 7-11 ticks
+            if tick > owner.tickIssuedShieldRepair then
+                owner.tickIssuedShieldRepair = tick
+                local guards = UnitGetGuards(owner)
+                if not TableEmpty(guards) then
+                    -- filter out guards with something queued after the shield assist order, as to not delete clear their queue
+                    for i, guard in guards do
+                        if TableGetn(UnitGetCommandQueue(guard)) >= 2 then
+                            guards[i] = nil
+                        end
+                    end
+
+                    -- For the filtered guards, clear their assist order, order repair, then re-add the assist order after
+                    IssueClearCommands(guards)
+                    IssueRepair(guards, owner)
+                    IssueGuard(guards, owner)
+                end
+            end
 
             -- check to spawn impact effect
             local r = Random(1, self.Size)
@@ -546,6 +619,7 @@ Shield = ClassShield(moho.shield_methods, Entity) {
 
             -- if we have no health, collapse
             if EntityGetHealth(self) <= 0 then
+                self.DisallowCollisions = true
                 ChangeState(self, self.DamageDrainedState)
                 -- otherwise, attempt to regenerate
             else
@@ -648,9 +722,13 @@ Shield = ClassShield(moho.shield_methods, Entity) {
     end,
 
     --- Called when a shield collides with a projectile to check if the collision is valid
-    -- @param self The shield we're checking the collision for
-    -- @param other The projectile we're checking the collision with
+    ---@param self Shield The shield we're checking the collision for
+    ---@param other Projectile The projectile we're checking the collision with
     OnCollisionCheck = function(self, other)
+
+        if self.DisallowCollisions then
+            return false
+        end
 
         -- special logic when it is a projectile to simulate air crashes
         if other.CrashingAirplaneShieldCollisionLogic then
@@ -692,6 +770,10 @@ Shield = ClassShield(moho.shield_methods, Entity) {
     -- @param self The shield we're checking the collision for
     -- @param firingWeapon The weapon the beam originates from that we're checking the collision with
     OnCollisionCheckWeapon = function(self, firingWeapon)
+
+        if self.DisallowCollisions then
+            return false
+        end
 
         -- if we're allied, check if we allow that type of collision
         if self.Army == firingWeapon.Army or IsAlly(self.Army, firingWeapon.Army) then
@@ -887,6 +969,7 @@ Shield = ClassShield(moho.shield_methods, Entity) {
             self.RegenThreadStartTick = GetGameTick() + 10 * self.RegenStartTime
 
             -- back to the regular onstate
+            self.DisallowCollisions = false
             ChangeState(self, self.OnState)
         end,
 
@@ -953,101 +1036,54 @@ Shield = ClassShield(moho.shield_methods, Entity) {
         end,
     },
 
-    --- Deprecated functionality
+    --#region Deprecated functionality
 
+    ---@deprecated
     DamageRechargeState = State {
 
         Main = function(self)
-
-            -- if not DeprecatedWarnings.DamageRechargeState then
-            --     DeprecatedWarnings.DamageRechargeState = true
-            --     SPEW("DamageRechargeState is deprecated: use shield.RechargeState instead.")
-            --     SPEW("Unit type of owner: " .. self.Owner.UnitId)
-            --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-            -- end
-
             -- back to the regular onstate
             ChangeState(self, self.RechargeState)
         end,
     },
 
+    ---@deprecated
     GetCachePosition = function(self)
-
-        -- if not DeprecatedWarnings.GetCachePosition then
-        --     DeprecatedWarnings.GetCachePosition = true
-        --     SPEW("GetCachePosition is deprecated: use shield:GetPosition() or shield:GetPositionXYZ() instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         return self:GetPosition()
     end,
 
+    ---@deprecated
     SetRechargeTime = function(self, rechargeTime, energyRechargeTime)
-
-        -- if not DeprecatedWarnings.SetRechargeTime then
-        --     DeprecatedWarnings.SetRechargeTime = true
-        --     SPEW("SetRechargeTime is deprecated: set the values shield.ShieldRechargeTime and shield.ShieldEnergyDrainRechargeTime instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         self.ShieldRechargeTime = rechargeTime
         self.ShieldEnergyDrainRechargeTime = energyRechargeTime
     end,
 
+    ---@deprecated
     SetVerticalOffset = function(self, offset)
-
-        -- if not DeprecatedWarnings.SetVerticalOffset then
-        --     DeprecatedWarnings.SetVerticalOffset = true
-        --     SPEW("SetVerticalOffset is deprecated: set the value shield.ShieldVerticalOffset instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         self.ShieldVerticalOffset = offset
     end,
 
+    ---@deprecated
     SetSize = function(self, size)
-
-        -- if not DeprecatedWarnings.SetSize then
-        --     DeprecatedWarnings.SetSize = true
-        --     SPEW("SetSize is deprecated: set the value shield.Size instead.")
-        --     SPEW("Source: " .. repr(debug.traceback()))
-        -- end
-
         self.Size = size
     end,
 
+    ---@deprecated
     SetShieldRegenRate = function(self, rate)
-
-        -- if not DeprecatedWarnings.SetShieldRegenRate then
-        --     DeprecatedWarnings.SetShieldRegenRate = true
-        --     SPEW("SetShieldRegenRate is deprecated: set the value shield.RegenRate instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         self.RegenRate = rate
     end,
 
+    ---@deprecated
     SetShieldRegenStartTime = function(self, time)
-
-        -- if not DeprecatedWarnings.SetShieldRegenStartTime then
-        --     DeprecatedWarnings.SetShieldRegenStartTime = true
-        --     SPEW("SetShieldRegenStartTime is deprecated: set the value shield.RegenStartTime instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         self.RegenStartTime = time
     end,
 
+    ---@deprecated
     SetType = function(self, type)
-
-        -- if not DeprecatedWarnings.ShieldType then
-        --     DeprecatedWarnings.ShieldType = true
-        --     SPEW("ShieldType is deprecated: set the value shield.ShieldType instead.")
-        --     SPEW("Stacktrace: " .. repr(debug.traceback()))
-        -- end
-
         self.ShieldType = type
     end,
+
+    --#endregion
 }
 
 --- A bubble shield attached to a single unit.

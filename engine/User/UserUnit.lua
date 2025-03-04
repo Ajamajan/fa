@@ -6,49 +6,71 @@
 local UserUnit = {}
 
 ---@alias UserUnitCommand 
---- | 'UNITCOMMAND_BuildFactory' 
---- | 'UNITCOMMAND_BuildSilo'
---- | 'UNITCOMMAND_DestroySelf'
---- | 'UNITCOMMAND_KillSelf'
---- | 'UNITCOMMAND_AssistCommander'
---- | 'UNITCOMMAND_Upgrade'
---- | 'UNITCOMMAND_Land'
---- | 'UNITCOMMAND_Stop'
---- | 'UNITCOMMAND_Dive'
---- | 'UNITCOMMAND_OverCharge'
---- | 'UNITCOMMAND_Sacrifice'
---- | 'UNITCOMMAND_Capture'
---- | 'UNITCOMMAND_Dock'
---- | 'UNITCOMMAND_Repair'
---- | 'UNITCOMMAND_Reclaim'
---- | 'UNITCOMMAND_Guard'
---- | 'UNITCOMMAND_BuildMobile'
---- | 'UNITCOMMAND_BuildAssist'
---- | 'UNITCOMMAND_Teleport'
---- | 'UNITCOMMAND_Ferry'
---- | 'UNITCOMMAND_AssistMove'
---- | 'UNITCOMMAND_DetachFromTransport'
---- | 'UNITCOMMAND_TransportUnloadSpecificUnits'
---- | 'UNITCOMMAND_TransportUnloadUnits'
---- | 'UNITCOMMAND_TransportReverseLoadUnits'
---- | 'UNITCOMMAND_TransportLoadUnits'
---- | 'UNITCOMMAND_FormPatrol'
---- | 'UNITCOMMAND_Patrol'
---- | 'UNITCOMMAND_CoordinatedMove'
---- | 'UNITCOMMAND_FormMove'
---- | 'UNITCOMMAND_Move'
---- | 'UNITCOMMAND_Nuke'
---- | 'UNITCOMMAND_FormAggressiveMove'
---- | 'UNITCOMMAND_AggressiveMove'
---- | 'UNITCOMMAND_Script'
---- | 'UNITCOMMAND_Tactical'
---- | 'UNITCOMMAND_FormAttack'
---- | 'UNITCOMMAND_Retaliate'
---- | 'UNITCOMMAND_Attack'
+---| "UNITCOMMAND_BuildFactory"
+---| "UNITCOMMAND_BuildSilo"
+---| "UNITCOMMAND_DestroySelf"
+---| "UNITCOMMAND_KillSelf"
+---| "UNITCOMMAND_AssistCommander"
+---| "UNITCOMMAND_Upgrade"
+---| "UNITCOMMAND_Land"
+---| "UNITCOMMAND_Stop"
+---| "UNITCOMMAND_Dive"
+---| "UNITCOMMAND_OverCharge"
+---| "UNITCOMMAND_Sacrifice"
+---| "UNITCOMMAND_Capture"
+---| "UNITCOMMAND_Dock"
+---| "UNITCOMMAND_Repair"
+---| "UNITCOMMAND_Reclaim"
+---| "UNITCOMMAND_Guard"
+---| "UNITCOMMAND_BuildMobile"
+---| "UNITCOMMAND_BuildAssist"
+---| "UNITCOMMAND_Teleport"
+---| "UNITCOMMAND_Ferry"
+---| "UNITCOMMAND_AssistMove"
+---| "UNITCOMMAND_DetachFromTransport" # Does nothing?
+---| "UNITCOMMAND_TransportUnloadSpecificUnits"
+---| "UNITCOMMAND_TransportUnloadUnits"
+---| "UNITCOMMAND_TransportReverseLoadUnits"
+---| "UNITCOMMAND_TransportLoadUnits"
+---| "UNITCOMMAND_FormPatrol"
+---| "UNITCOMMAND_Patrol"
+---| "UNITCOMMAND_CoordinatedMove"
+---| "UNITCOMMAND_FormMove"
+---| "UNITCOMMAND_Move"
+---| "UNITCOMMAND_Nuke"
+---| "UNITCOMMAND_FormAggressiveMove"
+---| "UNITCOMMAND_AggressiveMove"
+---| "UNITCOMMAND_Script"
+---| "UNITCOMMAND_Tactical"
+---| "UNITCOMMAND_FormAttack"
+---| "UNITCOMMAND_Retaliate"
+---| "UNITCOMMAND_Attack"
+---| "Move"
+---| "Stop"
+---| "Attack"
+---| "Guard"
+---| "Patrol"
+---| "Repair"
+---| "Capture"
+---| "TransportUnloadUnits"
+---| "TransportLoadUnits"
+---| "Nuke"
+---| "Tactical"
+---| "Teleport"
+---| "Ferry"
+---| "BuildSiloTactical"
+---| "BuildSiloNuke"
+---| "Sacrifice"
+---| "Pause"
+---| "OverCharge"
+---| "Dive"
+---| "Reclaim"
+---| "SpecialAction"
+---| "None"
 
 ---@alias UserUnitBlueprintCommand
---- | 'UNITCOMMAND_Upgrade'
---- | 'UNITCOMMAND_BuildFactory'
+---| "UNITCOMMAND_Upgrade"
+---| "UNITCOMMAND_BuildFactory"
 
 ---@class UICommandInfo
 ---@field type 'Teleport' | 'Move' | string
@@ -63,6 +85,9 @@ local UserUnit = {}
 ---@field tacticalSiloMaxStorageCount number
 ---@field tacticalSiloStorageCount number
 
+-- Thanks to the following engine patches this contains floats instead of ints:
+-- - https://github.com/FAForever/FA-Binary-Patches/pull/14
+-- - https://github.com/FAForever/FA-Binary-Patches/pull/75
 ---@class EconData
 ---@field energyConsumed number
 ---@field energyProduced number
@@ -102,7 +127,7 @@ end
 function UserUnit:GetBuildRate()
 end
 
---- Returns a table of commands
+--- Returns a table of commands. If the unit has the `FACTORY` category, returns the rally point command queue.
 ---@return UICommandInfo[]
 function UserUnit:GetCommandQueue()
 end

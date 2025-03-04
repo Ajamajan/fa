@@ -27,6 +27,9 @@ URS0201 = ClassUnit(CSeaUnit) {
         AntiTorpedoB = ClassWeapon(CIFSmartCharge) {},
     },
 
+    ---@param self URS0201
+    ---@param new HorizontalMovementState
+    ---@param old HorizontalMovementState
     OnMotionHorzEventChange = function(self, new, old)
         CSeaUnit.OnMotionHorzEventChange(self, new, old)
         if self.Dead then return end
@@ -170,7 +173,7 @@ URS0201 = ClassUnit(CSeaUnit) {
         CSeaUnit.OnScriptBitSet(self, bit)
         if bit == 1 then
             if self.Layer ~= 'Land' then
-                self:GetStat("h1_SetSalemAmph", 0)
+                self:ForceAltFootprint(true)
             else
                 self:SetScriptBit('RULEUTC_WeaponToggle', false)
             end
@@ -180,7 +183,7 @@ URS0201 = ClassUnit(CSeaUnit) {
     OnScriptBitClear = function(self, bit)
         CSeaUnit.OnScriptBitClear(self, bit)
         if bit == 1 then
-            self:GetStat("h1_SetSalemAmph", 1)
+            self:ForceAltFootprint(false)
         end
     end,
 }

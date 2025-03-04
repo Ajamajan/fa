@@ -39,19 +39,20 @@
 ---@field ArtilleryShieldBlocks? boolean
 --- information about the audio files used by the weapon
 ---@field Audio WeaponBlueprintAudio
+--- How many times the engine calls OnFire for the weapon when attacking ground before moving on to the next ground attack order. Defaults to 3
+---@field AttackGroundTries? number
 --- if the unit has no issued commands and has a weapon that has `AutoInitiateAttackCommand` set,
 --- then if it finds a suitable target it will issue an attack command to go after the target
 ---@field AutoInitiateAttackCommand? boolean
 --- Ballistic arcs that should be used on the projectile
 ---@field BallisticArc? WeaponBallisticArc
---- every `X/10+1` game ticks, this beam will collide and do damage - using `0` will cause beams to
---- damage every tick
+--- Interval in seconds between beam collision checks (which take 1 tick) - using `0` will cause beams to damage every tick
 ---@field BeamCollisionDelay number
 --- the amount of time the beam exists
 ---@field BeamLifetime number
 --- if the weapon will only fire when underwater
 ---@field BelowWaterFireOnly? boolean
---- threshold to release point before releasing ordnance
+--- Distance from bomb firing solution's position to the target's position within which the weapon will fire 
 ---@field BombDropThreshold? number
 --- information about the bonuses added to the weapon when it reaches a specific veterancy level
 ---@field Buffs BlueprintBuff[]
@@ -81,7 +82,7 @@
 ---@field DamageFriendly boolean
 --- blast radius
 ---@field DamageRadius number
---- used by the Absolver script to pass how much damage is done to shields, instead of `Damage`
+--- how much additional damage is dealt to shields using the "FAF_AntiShield" damagetype
 ---@field DamageToShields? number
 --- the type of damage the unit will do
 ---@field DamageType DamageType
@@ -140,10 +141,10 @@
 ---@field Flare WeaponBlueprintFlare
 --- used to force packing up a weapon before being able to fire again
 ---@field ForceSingleFire? boolean
---- controls what the weapon is allowed to target in reference to the heading of the unit
+--- controls what the weapon is allowed to target in reference to the heading of the unit. Defaults to 0
 ---@field HeadingArcCenter number
 --- controls what the weapon is allowed to target in reference to the arc center,
---- this is degrees on either side
+--- this is degrees on either side. Defaults to 180
 ---@field HeadingArcRange number
 --- does not consider the weapon when attacking targets if it is disabled
 ---@field IgnoreIfDisabled? boolean
@@ -159,15 +160,15 @@
 --- script: `Weapons = { FrontTurret01 = Class(TDFGaussCannonWeapon) {} }`
 --- If the Label does not match the weapon will not be workable. Defaults to `"Unlabelled"`.
 ---@field Label string
---- for tracking weapons, if the weapon should lead its target when aiming
+--- for weapons without a tracking projectile, if the weapon should lead its target when aiming
 ---@field LeadTarget? boolean
 --- if set, requires a player to directly issue an attack / launch order for the unit to fire. Is set for all SMLs and 
 --- stationary TMLs. Requires _some_ kind of delay between the firing (such as a charge delay) or queued orders are not 
 --- registered properly by the engine and the unit will remain stuck on the first order, never firing again until the
 --- player clears the command queue and re-issues the order
 ---@field ManualFire? boolean
---- changes the weapon range from spherical to cylindrical, where the cylinder has a height of
---- this twice this value
+--- The maximum height difference upon which the weapon can fire at targets (cylindrical range).
+--- Defaults to nil, which gives infinite vertical range.
 ---@field MaxHeightDiff? number
 --- this weapon can only hold this many counted projectiles
 ---@field MaxProjectileStorage number
@@ -205,8 +206,8 @@
 --- if `NeedProp` is true then whenever the unit aquires a new target and is ready to attack it, it
 --- will first run the `OnGotTarget` script on the weapon
 ---@field NeedPrep? boolean
---- currently just sets `AlwaysRecheckTarget = false` so that bombers don't retarget halfway through
---- a bombing run
+--- sets `AlwaysRecheckTarget = false` and prevents automatic target resetting
+--- so that bombers don't retarget halfway through a bombing run
 ---@field NeedToComputeBombDrop? boolean
 --- if the unit is set as "busy" while the weapon charges
 ---@field NotExclusive? boolean
@@ -218,7 +219,7 @@
 ---@field NukeInnerRingRadius? number
 --- How many damage ticks the inner damage ring of the nuke will be applied over to get from the
 --- epicenter to the inner ring radius. The ring will be broken up into this many disks.
----@field NukeInnerRingTicks? number
+---@field NukeInnerRingTicks? integer
 --- The total time in seconds it takes the inner damage ring to apply its damage from the epicenter
 --- of the nuke to its inner ring radius. If `0` or `1`, this behaves as a damage area.
 ---@field NukeInnerRingTotalTime? number
@@ -229,7 +230,7 @@
 ---@field NukeOuterRingRadius? number
 --- How many damage ticks the outer damage ring of the nuke will be applied over to get from the
 --- epicenter to the outer ring radius. The ring will be broken up into this many disks.
----@field NukeOuterRingTicks? number
+---@field NukeOuterRingTicks? integer
 --- The total time in seconds it takes the outer damage ring to apply its damage from the epicenter
 --- of the nuke to its outer ring radius. If `0` or `1`, this behaves as a damage area.
 ---@field NukeOuterRingTotalTime? number
@@ -285,10 +286,12 @@
 --- if the weapon goes directly from its `IdleState` to its `RackSalvoFiringState` without
 --- going through its `RackSalvoFireReadyState` first
 ---@field SkipReadyState? boolean
---- if the weapon is "slaved" to the unit's body, thus requiring it to face its target to fire
+--- If the weapon causes the unit to rotate towards the weapon's target when the target is outside of `SlavedToBodyArcRange`.
+--- With multiple slaved weapons, the first slaved weapon in the blueprint that currently has a target is used for turning.
+--- If `UnitBlueprintAI.AttackAngle` is true, then this causes the unit to rotate when attacking while idle.
 ---@field SlavedToBody? boolean
---- Range of arc in both directions to be considered "slaved" to a target. With multiple weapons, 
---- the first weapon in the blueprint that currently has a target is used for turning.
+--- Degrees to either side of the unit's heading outside of which the weapon will rotate the unit towards the target.
+--- Defaults to 1. Behavior gets overriden by `UnitBlueprintAI.AttackAngle`.
 ---@field SlavedToBodyArcRange? number
 --- flag to specify to not make the weapon active if the primary weapon has a current target
 ---@field StopOnPrimaryWeaponBusy? boolean
@@ -317,6 +320,8 @@
 ---@field TurretBoneDualMuzzle? Bone
 --- the second pitch bone for a turret, used for arms on bots as weapons
 ---@field TurretBoneDualPitch? Bone
+--- The second yaw bone for a turret, used for the torso of the Loyalist's secondary weapon that is on a turret connected to the torso.
+---@field TurretBoneDualYaw? Bone
 --- The bone used as the muzzle bone for turrets. This is used for aiming as where the projectile
 --- would come out
 ---@field TurretBoneMuzzle? Bone
@@ -326,7 +331,7 @@
 ---@field TurretBoneYaw? Bone
 --- If two manipulators are needed for this weapon. Used for bots with arms.
 ---@field TurretDualManipulators? boolean
---- if this weapon has a turret
+--- if this weapon has a turret. Defaults to false
 ---@field Turreted boolean
 --- the center angle for determining pitch, based off the rest pose of the model
 ---@field TurretPitch number
@@ -340,8 +345,14 @@
 ---@field TurretYawRange number
 --- the speed at which the turret can turn in its yaw direction
 ---@field TurretYawSpeed number
+--- the center angle for determining secondary yaw, based off the rest pose of the model
+---@field TurretDualYaw number
+--- the angle +/- off the secondary yaw that is a valid angle to turn to
+---@field TurretDualYawRange number
+--- the speed at which the secondary turret can turn in its yaw direction
+---@field TurretDualYawSpeed number
 --- if this weapon uses the recent firing solution to create projectile instead of the
---- aim bone transform
+--- aim bone transform when it fires.
 ---@field UseFiringSolutionInsteadOfAimBone? boolean
 --- the kind of weapon this is
 ---@field WeaponCategory WeaponCategory

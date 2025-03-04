@@ -142,6 +142,7 @@ keyDescriptions = {
     ['nuke'] = '<LOC key_desc_0063>Nuke',
     ['mode'] = '<LOC key_desc_0101>Cycle through all of the available fire states.',
     ['dock'] = '<LOC key_desc_0405>Dock',
+    ['dock_damaged'] = '<LOC key_dock_damaged>Dock damaged units',
     ['shift_repair'] = '<LOC key_desc_0036>Repair',
     ['shift_reclaim'] = '<LOC key_desc_0037>Reclaim',
     ['shift_patrol'] = '<LOC key_desc_0043>Patrol',
@@ -157,6 +158,7 @@ keyDescriptions = {
     ['shift_move'] = '<LOC key_desc_0065>Move',
     ['shift_nuke'] = '<LOC key_desc_0063>Nuke',
     ['shift_dock'] = '<LOC key_desc_0405>Dock',
+    ['shift_dock_damaged'] = '<LOC key_shift_dock_damaged>Dock damaged units',
     ['rename'] = '<LOC key_desc_0064>Rename the selected unit',
     ['goto_engineer'] = '<LOC key_desc_0066>Go to the nearest idle Engineer',
     ['select_idle_engineer'] = '<LOC key_desc_0067>Select the nearest idle Engineer',
@@ -312,8 +314,8 @@ keyDescriptions = {
     ['select_all_mex'] = '<LOC key_desc_0218>Select all mass extractors.',
     ['select_nearest_idle_lt_mex'] = '<LOC key_desc_0219>Select nearest onscreen lowest tech idle mass extractor.',
 
-    ['acu_select_cg'] = '<LOC key_desc_0220>Select ACU (control group)',
-    ['acu_append_cg'] = '<LOC key_desc_0221>Append ACU to selection (control group)',
+    ['acu_select_cg'] = '<LOC key_desc_0220>Select ACU (double tap to zoom)',
+    ['acu_append_cg'] = '<LOC key_desc_0221>Append ACU to selection (double tap to zoom)',
     ['select_nearest_idle_eng_not_acu'] = '<LOC key_desc_0222>Select nearest idle engineer (not ACU)',
     ['add_nearest_idle_engineers_seq'] = '<LOC key_desc_0223>Select/Add nearest idle engineers',
     ['cycle_idle_factories'] = '<LOC key_desc_0224>Cycle through idle factories',
@@ -538,8 +540,8 @@ keyDescriptions = {
     ['toggle_ai_nav_retreat_direction_from'] = 'NavUtils - Toggle to visualize output of RetreatDirectionFrom ',
     ['toggle_ai_nav_direction_to'] = 'NavUtils - Toggle to visualize output of DirectionTo',
 
-    ['filter_highest_engineer_and_assist'] = '<LOC key_desc_filter_highest_engineer_and_assist>Filter engineers',
-    ['shift_filter_highest_engineer_and_assist'] = '<LOC key_desc_shift_filter_highest_engineer_and_assist>Filter engineers',
+    ['filter_highest_engineer_and_assist'] = '<LOC key_desc_filter_highest_engineer_and_assist>Filter engineers by tech level and majority faction',
+    ['shift_filter_highest_engineer_and_assist'] = '<LOC key_desc_shift_filter_highest_engineer_and_assist>Filter engineers by tech level and majority faction',
     ['abort_navigation'] = '<LOC key_abort_navigation>Interrupt pathfinding of engineers',
     ['shift_abort_navigation'] = '<LOC key_abort_navigation>Interrupt pathfinding of engineers',
     ['discharge_shields'] = '<LOC key_discharge_shields>Discharge shields',
@@ -557,4 +559,14 @@ keyDescriptions = {
     ['shift_load_transports_clear'] = '<LOC key_desc_shift_load_transports_clear>Load into transports. Applies immediately',
     ['copy_orders'] = '<LOC key_desc_copy_orders>Copy orders of the unit the mouse is on top of',
     ['shift_copy_orders'] = '<LOC key_desc_shift_copy_orders>Copy orders of the unit the mouse is on top of',
+
+    ['select_surface_bombers'] = '<LOC key_desc_0407>Select all Bombers (Normal)',
+    ['select_torpedo_bombers'] = '<LOC key_desc_0408>Select all Bombers (Torpedo)',
+
+    ['create_build_template_02'] = '<LOC key_desc_create_build_template_02>Create a 2x2 chunk template',
+    ['create_build_template_04'] = '<LOC key_desc_create_build_template_02>Create a 4x4 chunk template',
+    ['create_build_template_08'] = '<LOC key_desc_create_build_template_02>Create a 8x8 chunk template',
+    ['create_build_template_16'] = '<LOC key_desc_create_build_template_02>Create a 16x16 chunk template',
+    ['create_build_template_32'] = '<LOC key_desc_create_build_template_02>Create a 32x32 chunk template',
+
 }

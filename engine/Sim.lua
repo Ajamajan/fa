@@ -145,7 +145,7 @@ end
 --- creates a beam, which then needs to be attached to a bone
 ---@see AttachBeamToEntity(emitter, entity, bone, army) # to attach the beam to an entity bone
 ---@see CreateBeamEmitterOnEntity(object, tobone, army, blueprint) # to create an attached beam emitter at once
----@param blueprint string
+---@param blueprint FileName
 ---@param army Army
 ---@return moho.IEffect
 function CreateBeamEmitter(blueprint, army)
@@ -156,7 +156,7 @@ end
 ---@param object BoneObject
 ---@param tobone Bone
 ---@param army Army
----@param blueprint string
+---@param blueprint FileName
 ---@return moho.IEffect
 function CreateBeamEmitterOnEntity(object, tobone, army, blueprint)
 end
@@ -218,13 +218,13 @@ function CreateDecal(position, heading, textureName1, textureName2, type, sizeX,
 end
 
 --- Creates an economy event for the unit that consumes resources over given time.
---- The unit shows the orange build bar for this event.
 ---@param unit Unit
 ---@param totalEnergy number
 ---@param totalMass number
 ---@param timeInSeconds number
+---@param callback? fun(unit: Unit, economyEventProgress: number) # progress is (0,1]. Typically used with `Unit.SetWorkProgress` to show the orange build bar.
 ---@return EconomyEvent
-function CreateEconomyEvent(unit, totalEnergy, totalMass, timeInSeconds)
+function CreateEconomyEvent(unit, totalEnergy, totalMass, timeInSeconds, callback)
 end
 
 --- creates an emitter at an entity's bone, but does not attach the emitter to it
@@ -334,7 +334,7 @@ end
 --- Creates a manipulator which rotates on a unit's bone
 ---@param object BoneObject
 ---@param bone Bone
----@param axis "x" | "y" | "z"
+---@param axis "x" | "y" | "z" | "-x" | "-y" | "-z"
 ---@param goal? unknown
 ---@param speed? number
 ---@param accel? number
@@ -425,7 +425,7 @@ end
 --- Creates a unit from a blueprint for an army, at a position with quaternion orientation
 ---@see CreateUnit2() # simple version
 ---@see CreateUnitHPR() # heading-pitch-roll version
----@param blueprint string
+---@param blueprintId string
 ---@param army Army
 ---@param x number
 ---@param y number
@@ -436,20 +436,20 @@ end
 ---@param qw number
 ---@param layer? number
 ---@return Unit
-function CreateUnit(blueprint, army, x, y, z, qx, qy, qz, qw, layer)
+function CreateUnit(blueprintId, army, x, y, z, qx, qy, qz, qw, layer)
 end
 
 --- Creates a unit from a blueprint for an army, at an X-Z map point with a heading
 ---@see CreateUnit() # quaternion version
 ---@see CreateUnitHPR() # heading-pitch-roll version
----@param blueprint string
+---@param blueprintId string
 ---@param army Army
----@param layer? number
+---@param layer Layer
 ---@param x number
 ---@param z number
 ---@param heading number
 ---@return Unit
-function CreateUnit2(blueprint, army, layer, x, z, heading)
+function CreateUnit2(blueprintId, army, layer, x, z, heading)
 end
 
 --- Creates a unit from a blueprint for an army, at a position with heading, pitch, and roll
@@ -626,8 +626,7 @@ function GetMapSize()
 end
 
 ---@overload fun(x0: number, z0: number, x1: number, z1: number): ReclaimObject[] | nil
---- Returns the reclaimable objects inside the given rectangle.
---- This includes props, units, wreckages.
+--- Returns the reclaimable objects inside the given rectangle. This includes props, units and wrecks. Unlike the brain functions, this function uses either the collision box (OO) or the visual box (AAB) for the query and is therefore much more accurate.
 ---@param rectangle Rectangle
 ---@return ReclaimObject[] | nil
 function GetReclaimablesInRect(rectangle)
@@ -671,6 +670,7 @@ end
 function GetUnitBlueprintByName(bpName)
 end
 
+---@overload fun(x1: number, z1: number, x2: number, z2: number): Unit[] | nil
 --- retrieves all units in a rectangle
 ---@param rectangle Rectangle
 ---@return Unit[] | nil
@@ -736,7 +736,7 @@ end
 
 --- Orders a group of units to attack a target
 ---@param units Unit[]
----@param target Unit
+---@param target Unit | Vector | Prop | Blip
 ---@return SimCommand
 function IssueAttack(units, target)
 end

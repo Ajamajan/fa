@@ -17,6 +17,8 @@ local EffectUtil = import("/lua/effectutilities.lua")
 local ExternalFactoryComponent = import("/lua/defaultcomponents.lua").ExternalFactoryComponent
 local DefaultExplosions = import("/lua/defaultexplosions.lua")
 
+local IsDestroyed = IsDestroyed
+
 ---@class UEL0401 : TMobileFactoryUnit, ExternalFactoryComponent
 ---@field UnitBeingBuilt Unit | nil
 ---@field AttachmentSliderManip moho.SlideManipulator
@@ -124,6 +126,18 @@ UEL0401 = ClassUnit(TMobileFactoryUnit, ExternalFactoryComponent) {
                 self.ExternalFactory:AddBuildRestriction(categories.ALLUNITS)
                 self.ExternalFactory:RequestRefreshUI()
             end
+        end
+    end,
+
+    ---Fixes a bug with external factories where ordering "deploy" will detach the unit under construction
+    ---@param self UEL0401
+    ---@param attachBone string
+    ---@param unit Unit
+    OnTransportDetach = function(self, attachBone, unit)
+        if not self.Dead and not unit.Dead and unit:GetFractionComplete() < 1.0 then
+            unit:AttachBoneTo(-2, self, attachBone)
+        else
+            TMobileFactoryUnit.OnTransportDetach(self, attachBone, unit)
         end
     end,
 
@@ -246,7 +260,8 @@ UEL0401 = ClassUnit(TMobileFactoryUnit, ExternalFactoryComponent) {
         local explosionBones = {}
         local explosionBoneCount = table.getn(self.ExplosionBones)
 
-        if instigator then
+        -- Since this is a thread, it is delayed by 1 tick so the instigator may be destroyed
+        if not IsDestroyed(instigator) then
             -- if there is an instigator, favor exploding bits that are near the instigator
             local ix, iy, iz = instigator:GetPositionXYZ()
             for k, bone in self.ExplosionBones do

@@ -104,26 +104,7 @@ function OnFirstUpdate()
     local playerArmy = armiesInfo.armiesTable[focusArmy]
     if avatars and avatars[1]:IsInCategory("COMMAND") then
         avatars[1]:SetCustomName(playerArmy.nickname)
-        PlaySound(Sound {
-            Bank = 'AmbientTest',
-            Cue = 'AMB_Planet_Rumble_zoom'
-        })
-        ForkThread(function()
-            WaitSeconds(1)
-
-            UIZoomTo(avatars, 1)
-            WaitSeconds(1.5)
-
-            local selected = false
-            repeat
-                WaitSeconds(0.1)
-
-                if not gameUIHidden then
-                    SelectUnits(avatars)
-                    selected = GetSelectedUnits()
-                end
-            until not table.empty(selected) or GameTick() > 50
-        end)
+        ForkThread(StartupSequence, avatars)
     end
 
     FlushEvents()
@@ -147,6 +128,28 @@ function OnFirstUpdate()
     UIUtil.UpdateCurrentSkin()
 end
 
+---@param avatars UserUnit[]
+function StartupSequence(avatars)
+    PlaySound(Sound {
+        Bank = "AmbientTest",
+        Cue = "AMB_Planet_Rumble_zoom"
+    })
+    WaitSeconds(1)
+
+    UIZoomTo(avatars, 1)
+    WaitSeconds(1.5)
+
+    local selected = false
+    repeat
+        WaitSeconds(0.1)
+
+        if not gameUIHidden then
+            SelectUnits(avatars)
+            selected = GetSelectedUnits()
+        end
+    until not table.empty(selected) or GameTick() > 50
+end
+
 function CreateUI(isReplay)
 
     -- overwrite some globals for performance / safety
@@ -157,6 +160,7 @@ function CreateUI(isReplay)
 
     -- start long-running threads
 
+    import("/lua/system/logger.lua")
     import("/lua/system/performance.lua")
     import("/lua/ui/game/cursor/depth.lua")
     import("/lua/ui/game/cursor/hover.lua")
@@ -195,17 +199,7 @@ function CreateUI(isReplay)
     if  Prefs.GetFromCurrentProfile('options.fidelity') >= 2 and
         Prefs.GetFromCurrentProfile('options.experimental_graphics') == 1
     then
-        ForkThread(function()
-            WaitSeconds(1.0)
-
-            if Prefs.GetFromCurrentProfile('options.level_of_detail') == 2 then
-                ConExecute("cam_SetLOD WorldCamera 0.70")
-            end
-
-            if Prefs.GetFromCurrentProfile('options.shadow_quality') == 3 then
-                ConExecute("ren_ShadowSize 2048")
-            end
-        end)
+        ForkThread(ExperimentalGraphicsSettingsThread)
     end
 
     local focusArmy = GetFocusArmy()
@@ -352,19 +346,53 @@ function CreateUI(isReplay)
     import("/lua/ui/game/reclaim.lua").SetMapSize()
 end
 
--- Current SC_FrameTimeClamp settings allows up to 100 fps as default (some users probably set this to 0 to "increase fps" which would be counter-productive)
--- Let's find out max Hz capability of adapter so we don't render unnecessary frames, should help a bit with render thread at 100%
+function ExperimentalGraphicsSettingsThread()
+    WaitSeconds(1.0)
+
+    if Prefs.GetFromCurrentProfile('options.level_of_detail') == 2 then
+        ConExecute("cam_SetLOD WorldCamera 0.70")
+    end
+
+    if Prefs.GetFromCurrentProfile('options.shadow_quality') == 3 then
+        ConExecute("ren_ShadowSize 2048")
+    end
+end
+
+--- Find out the max Hz capability of the adapter so we don't render unnecessary frames, reducing the load on the render thread.
+--- Some users might set SC_FrameTimeClamp to 0 which would be counterproductive for fps.
 function AdjustFrameRate()
+    -- vsync will automatically sync to max adapter framerate
     if options.vsync == 1 then return end
 
-    local video = options.video
+    local frametimeOption = Prefs.GetFromCurrentProfile('options.frametime')
+    if frametimeOption then
+        ConExecute("SC_FrameTimeClamp " .. frametimeOption)
+        return
+    end
+
+    -- SC_FrameTimeClamp defaults to 10ms, which is 100 fps
     local fps = 100
 
-    if type(options.primary_adapter) == 'string' then
-        local data = utils.StringSplit(options.primary_adapter, ',')
-        local hz = tonumber(data[3])
-        if hz then
-            fps = math.max(60, hz)
+    local primaryAdapter = options.primary_adapter
+    if type(primaryAdapter) == 'string' then
+        if primaryAdapter ~= 'windowed' then
+            -- the value for the option is formatted as `width,height,fps`
+            local data = utils.StringSplit(primaryAdapter, ',')
+            local hz = tonumber(data[3])
+            if hz then
+                fps = hz
+            end
+        else
+            -- if we're in windowed mode, maximize the framerate based on the engine-generated possible adapter settings
+            -- can't use `Prefs` because `options_overrides` isn't stored in a profile
+            local allAdapterOptions = GetPreference('options_overrides.primary_adapter.custom.states')
+            for _, option in allAdapterOptions do
+                local data = utils.StringSplit(option.key, ',')
+                local hz = tonumber(data[3])
+                if hz and hz > fps then
+                    fps = hz
+                end
+            end
         end
     end
 
@@ -575,7 +603,7 @@ function DeselectSelens(selection)
     return otherUnits, true
 end
 
---- A cache used with ObserveSelection to prevent continious table allocations
+--- A cache used with ObserveSelection to prevent continuous table allocations
 local cachedSelection = {
     oldSelection = { },
     newSelection = { },
@@ -586,14 +614,14 @@ local cachedSelection = {
 --- Observable to allow mods to do something with a new selection
 ObserveSelection = import("/lua/shared/observable.lua").Create()
 
--- This function is called whenever the set of currently selected units changes
--- See /lua/unit.lua for more information on the lua unit object
--- @param oldSelection: What the selection was before
--- @param newSelection: What the selection is now
--- @param added: Which units were added to the old selection
--- @param removed: Which units where removed from the old selection
 local hotkeyLabelsOnSelectionChanged = false
 local upgradeTab = false
+
+---This function is called whenever the set of currently selected units changes
+---@param oldSelection UserUnit[] What the selection was before
+---@param newSelection UserUnit[] What the selection is now
+---@param added UserUnit[]        Which units were added to the old selection
+---@param removed UserUnit[]      Which units where removed from the old selection
 function OnSelectionChanged(oldSelection, newSelection, added, removed)
 
     if ignoreSelection then
@@ -625,7 +653,7 @@ function OnSelectionChanged(oldSelection, newSelection, added, removed)
 
         if changed then
             ForkThread(function()
-                SelectUnits(newSelection)
+                SelectUnits(newSelection) -- cannot fork cfunction directly
             end)
             return
         end
@@ -701,9 +729,7 @@ function OnSelectionChanged(oldSelection, newSelection, added, removed)
             local mode, data = unpack(CM.GetCommandMode())
 
             if mode then
-                ForkThread(function()
-                    CM.StartCommandMode(mode, data)
-                end)
+                ForkThread(CM.StartCommandMode, mode, data)
             end
         end
     end
@@ -721,9 +747,12 @@ function OnQueueChanged(newQueue)
     end
 end
 
--- Called after the Sim has confirmed the game is indeed paused. This will happen
--- on everyone's machine in a network game.
+--- Called by the engine after the sim confirmed that the game is indeed paused. This is run on all instances that are connected to the lobby.
+---@param pausedBy integer   # The index of the client in the clients list (that you get via `GetSessionClients`)
+---@param timeoutsRemaining number
 function OnPause(pausedBy, timeoutsRemaining)
+    import("/lua/ui/game/pause.lua").OnPause(pausedBy, timeoutsRemaining)
+
     PauseSound("World",true)
     PauseSound("Music",true)
     PauseVoice("VO",true)
@@ -733,11 +762,17 @@ end
 
 -- Called after the Sim has confirmed that the game has resumed.
 local ResumedBy = nil
+
+--- Transmitted via a Chat command by another user to inform Lua who sent the resume command. 
+---@param sender string # The name of the player that resumed the game. 
 function SendResumedBy(sender)
     if not ResumedBy then ResumedBy = sender end
 end
 
+--- Called by the engine when the simulation is resumed
 function OnResume()
+    import("/lua/ui/game/pause.lua").OnResume()
+
     PauseSound("World",false)
     PauseSound("Music",false)
     PauseVoice("VO",false)
@@ -749,6 +784,8 @@ end
 -- Called immediately when the user hits the pause button on the machine
 -- that initiated the pause and other network players won't call this function
 function OnUserPause(pause)
+    import("/lua/ui/game/pause.lua").OnUserPause(pause)
+
     local Tabs = import("/lua/ui/game/tabs.lua")
     local focus = GetArmiesTable().focusArmy
     if Tabs.CanUserPause() then
@@ -766,7 +803,7 @@ function OnUserPause(pause)
             else
                 SessionSendChatMessage(import('/lua/ui/game/clientutils.lua').GetAll(), {
                     to = 'all',
-                    text = 'Unpaused the game',
+                    text = 'Resumed the game',
                     Chat = true,
                 })
             end

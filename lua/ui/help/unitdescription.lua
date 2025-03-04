@@ -327,7 +327,7 @@ Description = {
     -- AEON -- Armored Commander Unit/Upgrades
     ['ual0001'] = "<LOC Unit_Description_0305> Armored Commander is a combination of barracks and command center. Contains all the blueprints necessary to build a basic army from scratch. Upgradeable with combat enhancements, advanced engineering suits, resource allocation system, and teleporting.",
     ['ual0001-aes'] = "<LOC Unit_Description_0156> Expands the number of available schematics and increases the ACU's build speed and maximum health.",
-    ['ual0001-cd'] = "<LOC Unit_Description_0157> Creates a Quantum Stasis Field around the ACU. Immobilizes enemy units within its radius. High Energy Consumption. Range of the Field Adapts with the range of the Gun",
+    ['ual0001-cd'] = "<LOC Unit_Description_0157> Creates a Quantum Stasis Field around the ACU. Immobilizes enemy units within the ACU's main cannon range. Multiple Quantum Stasis Fields interfere with each other, having a limited effect.",
     ['ual0001-cba'] = "<LOC Unit_Description_0158>Increases the range of the ACU's main cannon and that of Overcharge.",
     ['ual0001-ecba'] = "<LOC Unit_Description_0466_faf>Massively increases the range of the ACU's main cannon and that of Overcharge.",
     ['ual0001-ess'] = "<LOC Unit_Description_0159> Greatly expands the range of the standard on-board ACU sensor systems.",
@@ -623,5 +623,6 @@ Description = {
     ['drlk001'] = "<LOC Unit_Description_0462> Mobile Anti-Air unit. Armed with a high-speed missiles, excellent against enemy gunships or air-fighters. Capable of switching weapon to anti-land attack but with smaller damage.",
     ['dalk003'] = "<LOC Unit_Description_0463> Mobile Anti-Air unit. Armed with a high-impact projectiles, excellent against enemy gunships or air-fighters.",
     ['dslk004'] = "<LOC Unit_Description_0464> Mobile Anti-Air unit. Armed with a long-range lasers, excellent against enemy gunships or air-fighters. Capable of switching weapon to anti-land attack but with smaller damage.",
+    ['srl0310'] = "<LOC Unit_Description_srl0310> Mobile support unit. Designed to attack and destroy enemy shields. Weapon system only very briefly stuns enemy units.",
 
 }

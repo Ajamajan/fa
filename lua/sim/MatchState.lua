@@ -12,16 +12,21 @@ local Conditions = {
 
 --- Ends the game, processing all events including sending score and statistics to the UI
 function CallEndGame()
-    ForkThread(function()
-        WaitSeconds(2.9)
-        for _, v in GameOverListeners do
-            v()
-        end
-        Sync.GameEnded = true
-        WaitSeconds(0.1)
-        EndGame()
-    end)
+    ForkThread(CallEndGameThread)
 end
+
+function CallEndGameThread()
+    WaitSeconds(2.9)
+
+    for _, v in GameOverListeners do
+        v()
+    end
+    Sync.GameEnded = true
+    WaitSeconds(0.1)
+
+    EndGame()
+end
+
 
 --- Finds and collectors the brains that are defeated
 ---@param aliveBrains AIBrain[]         # Table of brains that are relevant to check for defeat
@@ -83,7 +88,7 @@ function ObserverAfterDeath(armyIndex)
     end
 end
 
---- Continiously scans the game for brains being defeated or changes in alliances that can cause the game to end
+--- Continuously scans the game for brains being defeated or changes in alliances that can cause the game to end
 local function MatchStateThread()
 
     -- determine game conditions
